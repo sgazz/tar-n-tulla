@@ -1,4 +1,5 @@
 using UnityEngine;
+using TarTulla.Game;
 
 namespace TarTulla.CameraSystems
 {
@@ -20,6 +21,11 @@ namespace TarTulla.CameraSystems
         Vector3 velocity;
         float highestY;
 
+        float SmoothTime => GetCameraValue(c => c.smoothTime, smoothTime);
+        float VerticalOffset => GetCameraValue(c => c.verticalOffset, verticalOffset);
+        bool AllowSmallDownwardCorrection => GetCameraBool(c => c.allowSmallDownwardCorrection, allowSmallDownwardCorrection);
+        float MaxDownwardCorrection => GetCameraValue(c => c.maxDownwardCorrection, maxDownwardCorrection);
+
         void Start()
         {
             if (findTargetsOnStart && (targetA == null || targetB == null))
@@ -38,19 +44,19 @@ namespace TarTulla.CameraSystems
             }
 
             Vector2 midpoint = (targetA.position + targetB.position) * 0.5f;
-            float targetY = midpoint.y + verticalOffset;
+            float targetY = midpoint.y + VerticalOffset;
 
             if (targetY > highestY)
                 highestY = targetY;
 
-            float minAllowedY = allowSmallDownwardCorrection
-                ? highestY - maxDownwardCorrection
+            float minAllowedY = AllowSmallDownwardCorrection
+                ? highestY - MaxDownwardCorrection
                 : highestY;
             float desiredY = Mathf.Max(targetY, minAllowedY);
 
             float targetX = Mathf.Clamp(midpoint.x * horizontalFollow, -maxHorizontalOffset, maxHorizontalOffset);
             var desiredPosition = new Vector3(targetX, desiredY, transform.position.z);
-            transform.position = Vector3.SmoothDamp(transform.position, desiredPosition, ref velocity, smoothTime);
+            transform.position = Vector3.SmoothDamp(transform.position, desiredPosition, ref velocity, SmoothTime);
         }
 
         public void SetTargets(Transform a, Transform b)
@@ -66,7 +72,9 @@ namespace TarTulla.CameraSystems
             velocity = Vector3.zero;
         }
 
-        public void ResetToTargets()
+        public void ResetToTargets() => ResetCamera();
+
+        public void ResetCamera()
         {
             if (targetA == null || targetB == null)
             {
@@ -77,7 +85,7 @@ namespace TarTulla.CameraSystems
 
             Vector2 midpoint = (targetA.position + targetB.position) * 0.5f;
             float targetX = Mathf.Clamp(midpoint.x * horizontalFollow, -maxHorizontalOffset, maxHorizontalOffset);
-            var position = new Vector3(targetX, midpoint.y + verticalOffset, transform.position.z);
+            var position = new Vector3(targetX, midpoint.y + VerticalOffset, transform.position.z);
             ResetToTarget(position);
         }
 
@@ -96,6 +104,18 @@ namespace TarTulla.CameraSystems
                 if (tulla != null)
                     targetB = tulla.transform;
             }
+        }
+
+        float GetCameraValue(System.Func<TarTullaGameplayProfile.CameraTuning, float> fromProfile, float fallback)
+        {
+            var profile = TarTullaTuningAccess.GetActiveProfile();
+            return profile != null ? fromProfile(profile.Camera) : fallback;
+        }
+
+        bool GetCameraBool(System.Func<TarTullaGameplayProfile.CameraTuning, bool> fromProfile, bool fallback)
+        {
+            var profile = TarTullaTuningAccess.GetActiveProfile();
+            return profile != null ? fromProfile(profile.Camera) : fallback;
         }
     }
 }

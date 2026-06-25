@@ -1,0 +1,62 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 61e8845de9f143c7a7ded66d4716342c, type: 3}
+  m_Name: TarTulla_ExtremeTest
+  m_EditorClassIdentifier: 
+  profileId: tar_tulla_extreme_test
+  displayName: Extreme Test
+  description: Obvious tuning extremes for verifying profile wiring.
+  version: 1
+  Character:
+    jumpForce: 22
+    gravityScale: 4
+    maxFallSpeed: 25
+    horizontalDamping: 2
+    landingVelocityThreshold: 0.5
+    groundedGraceTime: 0.05
+    jumpCooldown: 0.12
+  Rope:
+    restLength: 0.6
+    maxLength: 1.2
+    springStrength: 250
+    damping: 8
+    pullAssistStrength: 120
+    lineWidth: 0.12
+    overstretchColorThreshold: 0.85
+    climbLeadPullFactor: 0.3
+    climbAnchorBoost: 2
+    climbSlingJumpMultiplier: 1.35
+  Tilt:
+    tiltSensitivity: 15
+    maxHorizontalAirSpeed: 5
+    airAcceleration: 20
+    groundedControlMultiplier: 0.15
+    airborneControlMultiplier: 1
+    inputDeadZone: 0.08
+    smoothing: 8
+  Camera:
+    verticalOffset: 1.5
+    smoothTime: 0.25
+    allowSmallDownwardCorrection: 1
+    maxDownwardCorrection: 1.5
+  Platforms:
+    platformCount: 10
+    verticalSpacingMin: 2.4
+    verticalSpacingMax: 3.2
+    horizontalRange: 1
+    platformWidth: 3.2
+    platformHeight: 0.3
+    startY: -2
+    seed: 1337
+  RunRules:
+    fallDistanceLimit: 14
+    resetDelay: 0

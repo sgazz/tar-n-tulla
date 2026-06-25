@@ -1,9 +1,12 @@
+using System.Collections;
 using UnityEngine;
 using TarTulla.CameraSystems;
+using TarTulla.Game;
 using TarTulla.Input;
 
 namespace TarTulla.Core
 {
+    [DefaultExecutionOrder(-50)]
     public class PrototypeRunController : MonoBehaviour
     {
         const string TarObjectName = "Tar";
@@ -17,6 +20,34 @@ namespace TarTulla.Core
         Transform tar;
         Transform tulla;
         bool runActive;
+        bool resetPending;
+        Coroutine resetRoutine;
+
+        float FallDistanceLimit => GetRunRules().fallDistanceLimit;
+        float ResetDelay => GetRunRules().resetDelay;
+
+        RunRuleSettings GetRunRules()
+        {
+            var profile = TarTullaTuningAccess.GetActiveProfile();
+            if (profile != null)
+                return new RunRuleSettings
+                {
+                    fallDistanceLimit = profile.RunRules.fallDistanceLimit,
+                    resetDelay = profile.RunRules.resetDelay
+                };
+
+            return new RunRuleSettings
+            {
+                fallDistanceLimit = fallDistanceLimit,
+                resetDelay = 0f
+            };
+        }
+
+        struct RunRuleSettings
+        {
+            public float fallDistanceLimit;
+            public float resetDelay;
+        }
 
         void Start()
         {
@@ -37,17 +68,24 @@ namespace TarTulla.Core
                 RebuildLayout();
 #endif
 
-            if (tar == null || tulla == null)
+            if (tar == null || tulla == null || progressTracker == null)
                 return;
 
             progressTracker.Tick();
 
-            if (HasFailed())
-                ResetRun();
+            if (!resetPending && HasFailed())
+                BeginResetRun();
         }
 
         public void StartRun()
         {
+            if (resetRoutine != null)
+            {
+                StopCoroutine(resetRoutine);
+                resetRoutine = null;
+            }
+
+            resetPending = false;
             ResolveReferences();
 
             if (levelBuilder == null || progressTracker == null)
@@ -56,6 +94,7 @@ namespace TarTulla.Core
                 return;
             }
 
+            levelBuilder.ClearGeneratedContent();
             levelBuilder.BuildPrototypeLayout();
             CacheJumperTransforms();
 
@@ -73,6 +112,7 @@ namespace TarTulla.Core
             if (levelBuilder == null)
                 return;
 
+            levelBuilder.ClearGeneratedContent();
             levelBuilder.BuildPrototypeLayout();
             CacheJumperTransforms();
 
@@ -82,20 +122,36 @@ namespace TarTulla.Core
             cameraFollow?.ResetToTargets();
         }
 
-        void ResetRun()
+        void BeginResetRun()
         {
+            resetPending = true;
+            resetRoutine = StartCoroutine(ResetRunAfterDelay());
+        }
+
+        IEnumerator ResetRunAfterDelay()
+        {
+            if (ResetDelay > 0f)
+                yield return new WaitForSeconds(ResetDelay);
+
             Debug.Log("[Tar&Tulla] Run reset: fell too far");
             StartRun();
         }
 
         bool HasFailed()
         {
-            float failLine = progressTracker.HighestReachedY - fallDistanceLimit;
+            float failLine = progressTracker.HighestReachedY - FallDistanceLimit;
             return tar.position.y < failLine && tulla.position.y < failLine;
         }
 
         void CacheJumperTransforms()
         {
+            if (levelBuilder != null && levelBuilder.TarTransform != null && levelBuilder.TullaTransform != null)
+            {
+                tar = levelBuilder.TarTransform;
+                tulla = levelBuilder.TullaTransform;
+                return;
+            }
+
             tar = FindJumperTransform(TarObjectName);
             tulla = FindJumperTransform(TullaObjectName);
         }

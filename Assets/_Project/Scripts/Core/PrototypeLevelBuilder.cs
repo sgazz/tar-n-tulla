@@ -1,12 +1,14 @@
 using UnityEngine;
 using TarTulla.CameraSystems;
 using TarTulla.Characters;
+using TarTulla.Game;
 using TarTulla.Input;
 using TarTulla.Platforms;
 using TarTulla.Rope;
 
 namespace TarTulla.Core
 {
+    [DefaultExecutionOrder(-80)]
     public class PrototypeLevelBuilder : MonoBehaviour
     {
         const string TarObjectName = "Tar";
@@ -23,7 +25,7 @@ namespace TarTulla.Core
         [SerializeField] VerticalCameraFollow2D cameraFollow;
         [SerializeField] bool buildOnPlay;
 
-        [Header("Generation")]
+        [Header("Generation Fallback")]
         [SerializeField] int platformCount = 24;
         [SerializeField] int generationSeed = 1337;
         [SerializeField] float startY = -2f;
@@ -31,7 +33,7 @@ namespace TarTulla.Core
         [SerializeField] float verticalSpacingMax = 3.2f;
         [SerializeField] float horizontalRange = 2f;
         [SerializeField] float platformWidth = 3.2f;
-        [SerializeField] float platformHeight = 0.4f;
+        [SerializeField] float platformHeight = 0.3f;
 
         [Header("Jumpers")]
         [SerializeField] float jumperRadius = 0.35f;
@@ -39,7 +41,55 @@ namespace TarTulla.Core
 
         public Transform TarTransform { get; private set; }
         public Transform TullaTransform { get; private set; }
-        public float StartBaselineY => startY;
+
+        public float StartBaselineY => GetPlatformSettings().startY;
+
+        PlatformGenerationSettings GetPlatformSettings()
+        {
+            var profile = TarTullaTuningAccess.GetActiveProfile();
+            if (profile != null)
+            {
+                var p = profile.Platforms;
+                return new PlatformGenerationSettings
+                {
+                    platformCount = p.platformCount,
+                    seed = p.seed,
+                    startY = p.startY,
+                    verticalSpacingMin = p.verticalSpacingMin,
+                    verticalSpacingMax = p.verticalSpacingMax,
+                    horizontalRange = p.horizontalRange,
+                    platformWidth = p.platformWidth,
+                    platformHeight = p.platformHeight,
+                    gravityScale = profile.Character.gravityScale
+                };
+            }
+
+            return new PlatformGenerationSettings
+            {
+                platformCount = platformCount,
+                seed = generationSeed,
+                startY = startY,
+                verticalSpacingMin = verticalSpacingMin,
+                verticalSpacingMax = verticalSpacingMax,
+                horizontalRange = horizontalRange,
+                platformWidth = platformWidth,
+                platformHeight = platformHeight,
+                gravityScale = 3f
+            };
+        }
+
+        struct PlatformGenerationSettings
+        {
+            public int platformCount;
+            public int seed;
+            public float startY;
+            public float verticalSpacingMin;
+            public float verticalSpacingMax;
+            public float horizontalRange;
+            public float platformWidth;
+            public float platformHeight;
+            public float gravityScale;
+        }
 
         void Awake()
         {
@@ -54,27 +104,38 @@ namespace TarTulla.Core
         {
             ResolveRoots();
 
-            if (characterSettings == null || ropeSettings == null)
-            {
-                Debug.LogError("[Tar&Tulla] PrototypeLevelBuilder: Missing CharacterSettings or RopeSettings.");
-                return;
-            }
+            bool hasProfile = TarTullaTuningAccess.HasActiveProfile;
 
-            if (airControlSettings == null)
+            if (!hasProfile)
             {
-                Debug.LogError("[Tar&Tulla] PrototypeLevelBuilder: Missing AirControlSettings.");
-                return;
+                if (characterSettings == null || ropeSettings == null)
+                {
+                    Debug.LogError("[Tar&Tulla] PrototypeLevelBuilder: Missing CharacterSettings or RopeSettings.");
+                    return;
+                }
+
+                if (airControlSettings == null)
+                {
+                    Debug.LogError("[Tar&Tulla] PrototypeLevelBuilder: Missing AirControlSettings.");
+                    return;
+                }
             }
 
             ClearGeneratedContent();
-            BuildPlatforms();
+            var platformSettings = GetPlatformSettings();
 
-            var tarStart = new Vector2(-0.75f, startY + jumperSpawnHeightAboveStart);
-            var tullaStart = new Vector2(0.75f, startY + jumperSpawnHeightAboveStart);
+            Debug.Log(
+                $"[Tar&Tulla][Builder] Using {(hasProfile ? TarTullaTuningAccess.GetActiveProfile().name : "fallback")} " +
+                $"platformCount={platformSettings.platformCount}, horizontalRange={platformSettings.horizontalRange}, seed={platformSettings.seed}");
+
+            BuildPlatforms(platformSettings);
+
+            var tarStart = new Vector2(-0.75f, platformSettings.startY + jumperSpawnHeightAboveStart);
+            var tullaStart = new Vector2(0.75f, platformSettings.startY + jumperSpawnHeightAboveStart);
 
             var tiltInput = EnsureMobileTiltInput();
-            var tar = CreateJumper(TarObjectName, tarStart, new Color(0.35f, 0.75f, 0.95f), tiltInput);
-            var tulla = CreateJumper(TullaObjectName, tullaStart, new Color(0.95f, 0.55f, 0.35f), tiltInput);
+            var tar = CreateJumper(TarObjectName, tarStart, new Color(0.35f, 0.75f, 0.95f), tiltInput, platformSettings.gravityScale);
+            var tulla = CreateJumper(TullaObjectName, tullaStart, new Color(0.95f, 0.55f, 0.35f), tiltInput, platformSettings.gravityScale);
 
             TarTransform = tar.transform;
             TullaTransform = tulla.transform;
@@ -82,7 +143,7 @@ namespace TarTulla.Core
             CreateRope(tar, tulla);
             WireCamera(tar.transform, tulla.transform);
 
-            Debug.Log($"[Tar&Tulla] Prototype layout built ({platformCount} platforms, seed {generationSeed}).");
+            Debug.Log($"[Tar&Tulla] Prototype layout built ({platformSettings.platformCount} platforms, seed {platformSettings.seed}).");
         }
 
         void ResolveRoots()
@@ -113,41 +174,46 @@ namespace TarTulla.Core
             DestroyIfExists(RopeObjectName);
         }
 
-        void BuildPlatforms()
+        void BuildPlatforms(PlatformGenerationSettings platformSettings)
         {
             var state = Random.state;
-            Random.InitState(generationSeed);
+            Random.InitState(platformSettings.seed);
 
-            float currentY = startY;
+            float currentY = platformSettings.startY;
             float currentX = 0f;
+            float previousWidth = platformSettings.platformWidth + 1.2f;
 
-            for (int i = 0; i < platformCount; i++)
+            for (int i = 0; i < platformSettings.platformCount; i++)
             {
-                float width = platformWidth;
-                float spacingMin = verticalSpacingMin;
-                float spacingMax = verticalSpacingMax;
-                float xRange = horizontalRange;
+                float width = platformSettings.platformWidth;
+                float spacingMin = platformSettings.verticalSpacingMin;
+                float spacingMax = platformSettings.verticalSpacingMax;
+                float xRange = platformSettings.horizontalRange;
 
                 if (i == 0)
                 {
-                    width = platformWidth + 1.2f;
+                    width = platformSettings.platformWidth + 1.2f;
                     currentX = 0f;
                 }
                 else if (i <= 5)
                 {
-                    width = platformWidth + 0.4f;
+                    width = platformSettings.platformWidth + 0.4f;
                     xRange *= 0.35f;
-                    spacingMax = verticalSpacingMin + 0.6f;
-                    currentX = Mathf.Clamp(currentX + Random.Range(-xRange, xRange), -horizontalRange, horizontalRange);
+                    spacingMax = platformSettings.verticalSpacingMin + 0.6f;
+                    currentX = Mathf.Clamp(
+                        currentX + Random.Range(-xRange, xRange),
+                        -platformSettings.horizontalRange * 0.5f,
+                        platformSettings.horizontalRange * 0.5f);
                 }
                 else
                 {
                     float direction = (i % 2 == 0) ? 1f : -1f;
-                    currentX = Mathf.Clamp(
-                        currentX + direction * Random.Range(xRange * 0.35f, xRange),
-                        -horizontalRange,
-                        horizontalRange);
-                    width = Mathf.Max(2.6f, platformWidth - 0.2f);
+                    float step = Random.Range(xRange * 0.35f, xRange);
+                    float proposedX = currentX + direction * step;
+                    float maxCenterDelta = (width + previousWidth) * 0.5f;
+                    proposedX = Mathf.Clamp(proposedX, currentX - maxCenterDelta, currentX + maxCenterDelta);
+                    currentX = Mathf.Clamp(proposedX, -platformSettings.horizontalRange, platformSettings.horizontalRange);
+                    width = Mathf.Max(2.6f, platformSettings.platformWidth - 0.2f);
                 }
 
                 if (i > 0)
@@ -156,7 +222,8 @@ namespace TarTulla.Core
                     currentY += spacing;
                 }
 
-                CreatePlatform($"Platform_{i + 1}", new Vector2(currentX, currentY), new Vector2(width, platformHeight));
+                CreatePlatform($"Platform_{i + 1}", new Vector2(currentX, currentY), new Vector2(width, platformSettings.platformHeight));
+                previousWidth = width;
             }
 
             Random.state = state;
@@ -177,14 +244,16 @@ namespace TarTulla.Core
             var collider = platform.AddComponent<BoxCollider2D>();
             collider.size = Vector2.one;
             collider.isTrigger = false;
+            collider.usedByEffector = true;
 
             var rb = platform.AddComponent<Rigidbody2D>();
             rb.bodyType = RigidbodyType2D.Static;
 
-            platform.AddComponent<BasicPlatform>();
+            var basicPlatform = platform.AddComponent<BasicPlatform>();
+            basicPlatform.ApplyOneWaySetup();
         }
 
-        JumperController2D CreateJumper(string name, Vector2 position, Color color, MobileTiltInput2D tiltInput)
+        JumperController2D CreateJumper(string name, Vector2 position, Color color, MobileTiltInput2D tiltInput, float gravityScale)
         {
             var jumper = new GameObject(name);
             jumper.transform.SetParent(charactersRoot, false);
@@ -202,7 +271,7 @@ namespace TarTulla.Core
             var rb = jumper.AddComponent<Rigidbody2D>();
             rb.bodyType = RigidbodyType2D.Dynamic;
             rb.mass = 1f;
-            rb.gravityScale = 3f;
+            rb.gravityScale = gravityScale;
             rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
             rb.interpolation = RigidbodyInterpolation2D.Interpolate;
             rb.constraints = RigidbodyConstraints2D.FreezeRotation;
@@ -225,7 +294,8 @@ namespace TarTulla.Core
                 var existingInput = existing.GetComponent<MobileTiltInput2D>();
                 if (existingInput != null)
                 {
-                    existingInput.Configure(airControlSettings);
+                    if (airControlSettings != null)
+                        existingInput.Configure(airControlSettings);
                     return existingInput;
                 }
             }
@@ -234,7 +304,8 @@ namespace TarTulla.Core
             tiltObject.transform.SetParent(systemsRoot, false);
 
             var tiltInput = tiltObject.AddComponent<MobileTiltInput2D>();
-            tiltInput.Configure(airControlSettings);
+            if (airControlSettings != null)
+                tiltInput.Configure(airControlSettings);
             return tiltInput;
         }
 
