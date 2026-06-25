@@ -259,16 +259,16 @@ Each gameplay log includes `source=TarTulla_<ProfileName>` when the profile is a
 
 ## One-Way Platforms
 
-Prototype platforms use **PlatformEffector2D** (Doodle Jump style):
+Prototype platforms use **PlatformEffector2D** (Doodle Jump style). Profile fields `useOneWayPlatforms` and `oneWaySurfaceArc` control this at generation time.
 
-| Setting | Value |
-|---------|-------|
-| `BoxCollider2D.usedByEffector` | `true` |
+| Setting | Value (default) |
+|---------|-----------------|
+| `BoxCollider2D.usedByEffector` | `true` when one-way enabled |
 | `PlatformEffector2D.useOneWay` | `true` |
-| `PlatformEffector2D.surfaceArc` | `140` |
+| `PlatformEffector2D.surfaceArc` | `150` (from profile) |
 | `PlatformEffector2D.useSideFriction` | `false` |
 | `PlatformEffector2D.useSideBounce` | `false` |
-| `platformHeight` (profile) | `0.3` (thin collider) |
+| `platformHeight` (profile) | `0.28` (thin collider) |
 
 **Behavior:**
 - Jumpers pass through platforms when moving **upward**
@@ -280,8 +280,149 @@ Prototype platforms use **PlatformEffector2D** (Doodle Jump style):
 2. Confirm `BasicPlatform` and `PlatformEffector2D` exist on generated platforms
 3. Confirm `BoxCollider2D.usedByEffector` is checked
 4. Lower `platformHeight` in profile (try `0.25`)
-5. Increase `surfaceArc` on `BasicPlatform` (try `160`)
+5. Increase `oneWaySurfaceArc` (try `160`)
 6. Check Console for `Landing rejected: moving upward` vs `Landing accepted`
+
+## Platform Generation Tuning
+
+Profile group: **Platforms** in `TarTullaGameplayProfile`.
+
+| Area | Key fields | What they do |
+|------|------------|--------------|
+| **Easy start** | `easyStartPlatformCount`, `safeLandingWidthMultiplier` | First N platforms are closer, wider, easier to land on |
+| **Vertical rhythm** | `verticalSpacingMin/Max`, `minVerticalGap`, `maxVerticalGap` | Controls jump height between platforms |
+| **Horizontal rhythm** | `horizontalRange`, `maxHorizontalGap`, `horizontalDirectionChangeChance`, `forceAlternatingPattern` | Zig-zag path left/right |
+| **Width variation** | `widthVariationEnabled`, `platformWidthMin/Max`, `narrowPlatformChance`, `wideRecoveryPlatformEvery` | Mix of narrow, normal, and recovery platforms |
+| **One-way** | `useOneWayPlatforms`, `oneWaySurfaceArc` | Doodle Jump pass-through from below |
+
+**Tune first if climb feels wrong:**
+- Too easy → raise `verticalSpacingMax`, enable `widthVariationEnabled`, lower `safeLandingWidthMultiplier`
+- Too hard → raise `easyStartPlatformCount`, lower `maxHorizontalGap`, widen `platformWidth`
+- Blocked by platforms → lower `platformHeight`, raise `oneWaySurfaceArc`
+- Too repetitive → raise `horizontalDirectionChangeChance` or enable `forceAlternatingPattern`
+
+Press **R** after changing platform values to rebuild the layout.
+
+## Procedural Platform Stream
+
+Profile group: **Platforms → Proceduralni stream** in `TarTullaGameplayProfile`.
+
+### Fixed vs procedural mode
+
+| Mode | Field | Behavior |
+|------|-------|----------|
+| **Fixed** | `useProceduralGeneration = false` | Generates exactly `platformCount` platforms once at run start (legacy behavior). |
+| **Procedural** | `useProceduralGeneration = true` | Generates `initialPlatformCount` at start, then streams new platforms as you climb. |
+
+### How streaming works
+
+- **`platformBufferAhead`** — Generator keeps platforms up to this height above the Tar/Tulla midpoint. Higher = more platforms ahead of the player.
+- **`cleanupDistanceBelowCamera`** — Platforms below `cameraY - cleanupDistanceBelowCamera` are destroyed. Higher = platforms linger longer below the view.
+- **`maxActivePlatforms`** — Hard cap on platform objects in the scene. Cleanup + cap prevent memory growth.
+- **`generationSegmentHeight`** — How much vertical height is added per generation batch.
+
+### Seed and randomization
+
+- **`seed`** — Deterministic layout when `randomizeSeedOnRun` is off. Same seed = same platform sequence.
+- **`randomizeSeedOnRun`** — New random seed each run (on **R** reset or fall reset). Use for variety; turn off for repeatable testing.
+
+### Difficulty ramp
+
+When `difficultyRampEnabled` is on, after `difficultyRampStartHeight` above `startY`:
+- Vertical spacing gradually increases toward `maxVerticalSpacingAtHighDifficulty`
+- Platform width gradually decreases toward `minPlatformWidthAtHighDifficulty`
+- Rate controlled by `difficultyRampStrength`
+
+### Recovery platforms
+
+Every `recoveryPlatformEvery` platforms (0 = off), a wider platform is placed using `recoveryPlatformWidthMultiplier`.
+
+### Debug logs
+
+On `PrototypeLevelBuilder`, enable **Enable Stream Debug Logs** to see mode, seed, `highestGeneratedY`, placement, and cleanup counts in Console.
+
+### Testing endless generation
+
+1. Set `useProceduralGeneration = true` on the active profile.
+2. Play and climb past the initial platforms.
+3. New platforms should appear above you; climb should not end at a fixed count.
+4. Optional: enable stream debug logs and watch `highestGeneratedY` grow.
+
+### Testing cleanup
+
+1. Climb high enough that platforms fall behind the camera.
+2. In Hierarchy under `LevelRoot`, old platform count should stabilize (not grow forever).
+3. With debug logs on, watch `Cleanup removed=N` messages.
+
+### Switch back to fixed mode
+
+Set `useProceduralGeneration = false` on the profile and press **R**. Only `platformCount` platforms are built.
+
+### Tune first if layouts feel wrong
+
+| Problem | Tune |
+|---------|------|
+| **Too easy** | Lower `platformBufferAhead` is not the fix — raise `verticalSpacingMax`, enable `difficultyRampEnabled`, increase `difficultyRampStrength` |
+| **Too hard** | Raise `easyStartPlatformCount`, lower `maxVerticalSpacingAtHighDifficulty`, widen `platformWidth`, lower `recoveryPlatformEvery` for more recovery platforms |
+| **Too random / unfair** | Lower `horizontalDirectionChangeChance`, enable `forceAlternatingPattern`, lower `maxHorizontalGap`, set fixed `seed`, disable `randomizeSeedOnRun` |
+| **Platforms run out** | Raise `platformBufferAhead` or `maxActivePlatforms` |
+| **Too many objects** | Lower `maxActivePlatforms` or `cleanupDistanceBelowCamera` |
+
+## Portrait playfield bounds
+
+Profile group: **Platforms → Granice igrališta (portrait)** in `TarTullaGameplayProfile`.
+
+### Visible width formula
+
+For an orthographic portrait camera:
+
+- `visibleHeight = orthographicSize * 2`
+- `visibleWidth = visibleHeight * aspect`
+- `cameraHalfWidth = orthographicSize * aspect` (half of visible world width)
+
+On 9:16 with `orthographicSize = 8`: `cameraHalfWidth ≈ 4.5` world units.
+
+### How platform X is clamped
+
+After all horizontal placement logic (zig-zag, gaps, recovery width), the generator computes:
+
+1. `allowedHalfX = cameraHalfWidth - platformHalfWidth - screenHorizontalMargin`
+2. `effectiveHalfRange = min(horizontalRange, allowedHalfX)`
+3. `x = Clamp(x, -effectiveHalfRange, effectiveHalfRange)`
+
+Wider platforms get a smaller allowed center range so the full platform stays on screen.
+
+### Key fields
+
+| Field | Purpose |
+|-------|---------|
+| `useCameraBasedHorizontalBounds` | Read width from `Camera.main` instead of fallback |
+| `screenHorizontalMargin` | Padding from screen edge — increase to keep platforms away from borders |
+| `clampPlatformsToVisibleWidth` | Enable camera-aware X clamp (recommended on) |
+| `manualHalfWidthFallback` | Used when camera is unavailable (edit mode gizmos, no Main Camera tag) |
+| `drawPlayfieldBoundsGizmos` | Cyan vertical lines in Scene view at safe playfield edges |
+
+### Camera horizontal lock
+
+`Camera.lockHorizontalPosition` (profile) / `VerticalCameraFollow2D.lockHorizontalPosition` keeps camera at **X = 0**. Only Y follows the climb. This prevents the view from drifting sideways when jumpers move laterally.
+
+### Testing 9:16 Game View
+
+1. Set Game View aspect to **9:16** (or a phone resolution).
+2. Ensure Main Camera is tagged **MainCamera** and orthographic.
+3. Enable `drawPlayfieldBoundsGizmos` and check Scene view lines match screen edges.
+4. Play and climb — platform edges should stay inside the portrait frame.
+5. Optional: enable **Enable Stream Debug Logs** on `PrototypeLevelBuilder` for `effectiveHalfRange` values.
+
+### If objects still leave the screen
+
+| Cause | Fix |
+|-------|-----|
+| Platforms too wide | Lower `platformWidth`, `recoveryPlatformWidthMultiplier`, or `safeLandingWidthMultiplier` |
+| `horizontalRange` too large | Lower `horizontalRange` — camera clamp helps but very wide platforms still need smaller width |
+| Jumpers/rope swing off-screen | Not clamped yet — reduce `maxHorizontalGap`, tilt control, or enable soft bounds later |
+| Wrong aspect in editor | Match Game View to target device aspect (9:16) |
+| No Main Camera at build time | Set `manualHalfWidthFallback` to expected half-width (~4.5 for size 8 @ 9:16) |
 
 ## Design Documentation
 

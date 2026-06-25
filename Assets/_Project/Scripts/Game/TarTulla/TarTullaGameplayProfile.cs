@@ -67,11 +67,38 @@ namespace TarTulla.Game
             Camera.maxDownwardCorrection = Mathf.Max(0f, Camera.maxDownwardCorrection);
 
             Platforms.platformCount = Mathf.Max(1, Platforms.platformCount);
-            Platforms.verticalSpacingMin = Mathf.Max(0.5f, Platforms.verticalSpacingMin);
+            Platforms.verticalSpacingMin = Mathf.Max(0.1f, Platforms.verticalSpacingMin);
             Platforms.verticalSpacingMax = Mathf.Max(Platforms.verticalSpacingMin, Platforms.verticalSpacingMax);
+            Platforms.minVerticalGap = Mathf.Max(0.1f, Platforms.minVerticalGap);
+            Platforms.maxVerticalGap = Mathf.Max(Platforms.minVerticalGap, Platforms.maxVerticalGap);
             Platforms.horizontalRange = Mathf.Max(0f, Platforms.horizontalRange);
+            Platforms.maxHorizontalGap = Mathf.Max(0f, Platforms.maxHorizontalGap);
+            Platforms.horizontalDirectionChangeChance = Mathf.Clamp01(Platforms.horizontalDirectionChangeChance);
             Platforms.platformWidth = Mathf.Max(0.5f, Platforms.platformWidth);
-            Platforms.platformHeight = Mathf.Max(0.2f, Platforms.platformHeight);
+            Platforms.platformHeight = Mathf.Max(0.1f, Platforms.platformHeight);
+            Platforms.platformWidthMin = Mathf.Max(0.5f, Platforms.platformWidthMin);
+            Platforms.platformWidthMax = Mathf.Max(Platforms.platformWidthMin, Platforms.platformWidthMax);
+            Platforms.narrowPlatformChance = Mathf.Clamp01(Platforms.narrowPlatformChance);
+            Platforms.wideRecoveryPlatformEvery = Mathf.Max(0, Platforms.wideRecoveryPlatformEvery);
+            Platforms.easyStartPlatformCount = Mathf.Max(0, Platforms.easyStartPlatformCount);
+            Platforms.safeLandingWidthMultiplier = Mathf.Max(1f, Platforms.safeLandingWidthMultiplier);
+            Platforms.oneWaySurfaceArc = Mathf.Clamp(Platforms.oneWaySurfaceArc, 90f, 180f);
+            Platforms.recoveryPlatformEvery = Mathf.Max(0, Platforms.recoveryPlatformEvery);
+            Platforms.recoveryPlatformWidthMultiplier = Mathf.Max(1f, Platforms.recoveryPlatformWidthMultiplier);
+            Platforms.initialPlatformCount = Mathf.Max(1, Platforms.initialPlatformCount);
+            Platforms.platformBufferAhead = Mathf.Max(0.1f, Platforms.platformBufferAhead);
+            Platforms.cleanupDistanceBelowCamera = Mathf.Max(0.1f, Platforms.cleanupDistanceBelowCamera);
+            Platforms.maxActivePlatforms = Mathf.Max(Platforms.initialPlatformCount, Platforms.maxActivePlatforms);
+            Platforms.generationSegmentHeight = Mathf.Max(0.1f, Platforms.generationSegmentHeight);
+            Platforms.difficultyRampStartHeight = Mathf.Max(0f, Platforms.difficultyRampStartHeight);
+            Platforms.difficultyRampStrength = Mathf.Max(0f, Platforms.difficultyRampStrength);
+            Platforms.minPlatformWidthAtHighDifficulty = Mathf.Max(0.5f, Platforms.minPlatformWidthAtHighDifficulty);
+            Platforms.maxVerticalSpacingAtHighDifficulty = Mathf.Max(Platforms.verticalSpacingMin, Platforms.maxVerticalSpacingAtHighDifficulty);
+            if (Platforms.maxActivePlatforms < Platforms.platformCount)
+                Platforms.maxActivePlatforms = Platforms.platformCount;
+            Platforms.screenHorizontalMargin = Mathf.Max(0f, Platforms.screenHorizontalMargin);
+            Platforms.manualHalfWidthFallback = Mathf.Max(0.1f, Platforms.manualHalfWidthFallback);
+            Character.jumperSoftBoundsForce = Mathf.Max(0f, Character.jumperSoftBoundsForce);
 
             RunRules.fallDistanceLimit = Mathf.Max(1f, RunRules.fallDistanceLimit);
             RunRules.resetDelay = Mathf.Max(0f, RunRules.resetDelay);
@@ -102,6 +129,13 @@ namespace TarTulla.Game
 
             [Tooltip("Pauza između dva automatska skoka. Veća vrednost usporava ritam skakanja.")]
             public float jumpCooldown = 0.12f;
+
+            [Header("Meki horizontalni limiti (rezerva)")]
+            [Tooltip("Ako je uključeno, jumperi dobijaju blagu silu ka centru ekrana blizu ivica. Još nije implementirano u fizici.")]
+            public bool useSoftHorizontalBoundsForJumpers;
+
+            [Tooltip("Jačina meke sile ka centru kada su jumperi blizu ivica. Veća vrednost = jače vraćanje.")]
+            public float jumperSoftBoundsForce;
         }
 
         [Serializable]
@@ -178,34 +212,149 @@ namespace TarTulla.Game
 
             [Tooltip("Maksimalno dopušteno spuštanje kamere ispod najviše tačke. Veća vrednost = fleksibilniji kadar.")]
             public float maxDownwardCorrection = 1.5f;
+
+            [Tooltip("Drži kameru na X=0 i prati samo vertikalno kretanje. Isključi za horizontalni follow.")]
+            public bool lockHorizontalPosition = true;
         }
 
         [Serializable]
         public class PlatformTuning
         {
+            [Header("Opšte")]
             [Tooltip("Ukupan broj generisanih platformi. Više = duži vertikalni run.")]
-            public int platformCount = 24;
-
-            [Tooltip("Minimalni vertikalni razmak između platformi. Manje = gušći i lakši climb.")]
-            public float verticalSpacingMin = 2.4f;
-
-            [Tooltip("Maksimalni vertikalni razmak između platformi. Više = veći skokovi između platformi.")]
-            public float verticalSpacingMax = 3.2f;
-
-            [Tooltip("Koliko levo-desno platforme mogu da se pomeraju. Veća vrednost = širi zig-zag put.")]
-            public float horizontalRange = 2f;
-
-            [Tooltip("Širina platformi. Veća vrednost = lakše sletanje i više prostora.")]
-            public float platformWidth = 3.2f;
-
-            [Tooltip("Debljina kolajdera platforme. Manja vrednost = manje zaglavljivanje sa strane i glave.")]
-            public float platformHeight = 0.3f;
+            public int platformCount = 25;
 
             [Tooltip("Početna Y visina prve platforme u generisanom nivou.")]
             public float startY = -2f;
 
             [Tooltip("Seed za proceduralni raspored. Isti seed uvek daje isti raspored platformi.")]
             public int seed = 1337;
+
+            [Header("Proceduralni stream")]
+            [Tooltip("Uključuje beskonačni proceduralni tok platformi umesto fiksnog broja.")]
+            public bool useProceduralGeneration = true;
+
+            [Tooltip("Broj platformi generisanih na početku run-a u proceduralnom režimu.")]
+            public int initialPlatformCount = 12;
+
+            [Tooltip("Koliko visine iznad reference tačke generator unapred pravi platforme. Veća vrednost = više platformi ispred.")]
+            public float platformBufferAhead = 18f;
+
+            [Tooltip("Udaljenost ispod kamere nakon koje se stare platforme brišu. Veća vrednost = duže ostaju u memoriji.")]
+            public float cleanupDistanceBelowCamera = 14f;
+
+            [Tooltip("Maksimalan broj aktivnih platformi u sceni. Veća vrednost = više objekata, sporije čišćenje.")]
+            public int maxActivePlatforms = 40;
+
+            [Tooltip("Visina segmenta koji generator dodaje po pozivu. Veća vrednost = veći batch po frame-u.")]
+            public float generationSegmentHeight = 10f;
+
+            [Tooltip("Ako je uključeno, svaki run dobija novi seed umesto fiksnog iz profila.")]
+            public bool randomizeSeedOnRun;
+
+            [Header("Vertikalni razmak")]
+            [Tooltip("Minimalni vertikalni razmak između platformi posle lakog starta. Manje = gušći climb.")]
+            public float verticalSpacingMin = 1.8f;
+
+            [Tooltip("Maksimalni vertikalni razmak između platformi posle lakog starta. Više = veći skokovi.")]
+            public float verticalSpacingMax = 2.8f;
+
+            [Tooltip("Apsolutni minimum vertikalnog razmaka koji generator sme da koristi.")]
+            public float minVerticalGap = 1.5f;
+
+            [Tooltip("Apsolutni maksimum vertikalnog razmaka koji generator sme da koristi.")]
+            public float maxVerticalGap = 3f;
+
+            [Header("Horizontalno postavljanje")]
+            [Tooltip("Koliko levo-desno platforme mogu da se pomeraju od centra. Veća vrednost = širi zig-zag.")]
+            public float horizontalRange = 2.8f;
+
+            [Tooltip("Maksimalni horizontalni korak između dve platforme. Veća vrednost = širi lateralni skokovi.")]
+            public float maxHorizontalGap = 2.2f;
+
+            [Tooltip("Šansa da generator promeni horizontalni smer (0–1). Veća vrednost = češće menjanje smera.")]
+            [Range(0f, 1f)]
+            public float horizontalDirectionChangeChance = 0.55f;
+
+            [Tooltip("Ako je uključeno, platforme naizmenično idu levo-desno umesto slučajnih promena smera.")]
+            public bool forceAlternatingPattern;
+
+            [Header("Veličina platforme")]
+            [Tooltip("Osnovna širina platforme kada varijacija širine nije aktivna.")]
+            public float platformWidth = 2.8f;
+
+            [Tooltip("Debljina kolajdera platforme. Manja vrednost = manje zaglavljivanje sa strane i glave.")]
+            public float platformHeight = 0.28f;
+
+            [Tooltip("Uključuje nasumičnu širinu platformi između min i max vrednosti.")]
+            public bool widthVariationEnabled;
+
+            [Tooltip("Najuža dozvoljena širina platforme kada je varijacija uključena.")]
+            public float platformWidthMin = 1.8f;
+
+            [Tooltip("Najšira dozvoljena širina platforme kada je varijacija uključena.")]
+            public float platformWidthMax = 3.4f;
+
+            [Tooltip("Šansa za usku platformu (0–1). Veća vrednost = češće uske platforme.")]
+            [Range(0f, 1f)]
+            public float narrowPlatformChance = 0.15f;
+
+            [Tooltip("Na svakoj N-toj platformi napravi širu recovery platformu. 0 = isključeno.")]
+            public int wideRecoveryPlatformEvery = 6;
+
+            [Header("Težina (ramp)")]
+            [Tooltip("Postepeno pooštrava razmake i sužava platforme nakon određene visine.")]
+            public bool difficultyRampEnabled = true;
+
+            [Tooltip("Visina od startY posle koje počinje ramp težine.")]
+            public float difficultyRampStartHeight = 25f;
+
+            [Tooltip("Jačina pooštravanja (0+). Veća vrednost = brži prelaz ka težim vrednostima.")]
+            public float difficultyRampStrength = 0.25f;
+
+            [Tooltip("Najuža širina platforme na visokoj težini.")]
+            public float minPlatformWidthAtHighDifficulty = 1.8f;
+
+            [Tooltip("Maksimalni vertikalni razmak na visokoj težini.")]
+            public float maxVerticalSpacingAtHighDifficulty = 3.2f;
+
+            [Header("Recovery platforme")]
+            [Tooltip("Na svakoj N-toj platformi u stream-u napravi širu recovery platformu. 0 = isključeno.")]
+            public int recoveryPlatformEvery = 7;
+
+            [Tooltip("Množilac širine recovery platforme. Veća vrednost = šira sigurna platforma.")]
+            public float recoveryPlatformWidthMultiplier = 1.35f;
+
+            [Header("Laki start")]
+            [Tooltip("Broj prvih platformi sa lakšim razmakom i širim površinama za sigurniji početak.")]
+            public int easyStartPlatformCount = 5;
+
+            [Tooltip("Množilac širine za laki start i recovery platforme. Veća vrednost = šire i sigurnije sletanje.")]
+            public float safeLandingWidthMultiplier = 1.25f;
+
+            [Header("One-way ponašanje")]
+            [Tooltip("Platforme prolaze kroz jumpere odozdo (Doodle Jump stil).")]
+            public bool useOneWayPlatforms = true;
+
+            [Tooltip("Luk površine one-way kolajdera (90–180). Veća vrednost = šira gornja površina za sletanje.")]
+            [Range(90f, 180f)]
+            public float oneWaySurfaceArc = 150f;
+
+            [Header("Granice igrališta (portrait)")]
+            [Tooltip("Ako je uključeno, generator računa dozvoljenu širinu igrališta na osnovu orthographic kamere.")]
+            public bool useCameraBasedHorizontalBounds = true;
+
+            [Tooltip("Sigurnosni razmak od ivice ekrana. Veća vrednost drži platforme dalje od ivica.")]
+            public float screenHorizontalMargin = 0.35f;
+
+            [Tooltip("Ako je uključeno, centar platforme se ograničava tako da cela platforma ostane vidljiva.")]
+            public bool clampPlatformsToVisibleWidth = true;
+
+            [Tooltip("Rezervna poluširina igrališta ako kamera nije dostupna.")]
+            public float manualHalfWidthFallback = 4f;
+
+            [Tooltip("Prikazuje granice vidljivog igrališta u Scene view-u radi lakšeg podešavanja.")]
+            public bool drawPlayfieldBoundsGizmos = true;
         }
 
         [Serializable]

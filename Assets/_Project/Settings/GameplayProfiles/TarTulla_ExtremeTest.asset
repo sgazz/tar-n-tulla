@@ -24,6 +24,8 @@ MonoBehaviour:
     landingVelocityThreshold: 0.5
     groundedGraceTime: 0.05
     jumpCooldown: 0.12
+    useSoftHorizontalBoundsForJumpers: 0
+    jumperSoftBoundsForce: 0
   Rope:
     restLength: 0.6
     maxLength: 1.2
@@ -48,15 +50,49 @@ MonoBehaviour:
     smoothTime: 0.25
     allowSmallDownwardCorrection: 1
     maxDownwardCorrection: 1.5
+    lockHorizontalPosition: 1
   Platforms:
     platformCount: 10
-    verticalSpacingMin: 2.4
-    verticalSpacingMax: 3.2
-    horizontalRange: 1
-    platformWidth: 3.2
-    platformHeight: 0.3
     startY: -2
     seed: 1337
+    useProceduralGeneration: 1
+    initialPlatformCount: 12
+    platformBufferAhead: 18
+    cleanupDistanceBelowCamera: 14
+    maxActivePlatforms: 40
+    generationSegmentHeight: 10
+    randomizeSeedOnRun: 0
+    verticalSpacingMin: 1.8
+    verticalSpacingMax: 2.8
+    minVerticalGap: 1.5
+    maxVerticalGap: 3
+    horizontalRange: 1
+    maxHorizontalGap: 1.2
+    horizontalDirectionChangeChance: 0.55
+    forceAlternatingPattern: 0
+    platformWidth: 2.8
+    platformHeight: 0.28
+    widthVariationEnabled: 0
+    platformWidthMin: 1.8
+    platformWidthMax: 3.4
+    narrowPlatformChance: 0.15
+    wideRecoveryPlatformEvery: 6
+    difficultyRampEnabled: 1
+    difficultyRampStartHeight: 25
+    difficultyRampStrength: 0.25
+    minPlatformWidthAtHighDifficulty: 1.8
+    maxVerticalSpacingAtHighDifficulty: 3.2
+    recoveryPlatformEvery: 7
+    recoveryPlatformWidthMultiplier: 1.35
+    easyStartPlatformCount: 5
+    safeLandingWidthMultiplier: 1.25
+    useOneWayPlatforms: 1
+    oneWaySurfaceArc: 150
+    useCameraBasedHorizontalBounds: 1
+    screenHorizontalMargin: 0.35
+    clampPlatformsToVisibleWidth: 1
+    manualHalfWidthFallback: 4
+    drawPlayfieldBoundsGizmos: 1
   RunRules:
     fallDistanceLimit: 14
     resetDelay: 0

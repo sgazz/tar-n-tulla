@@ -16,6 +16,7 @@ namespace TarTulla.CameraSystems
         [SerializeField] float maxDownwardCorrection = 1.5f;
         [SerializeField] float horizontalFollow = 0.4f;
         [SerializeField] float maxHorizontalOffset = 2.5f;
+        [SerializeField] bool lockHorizontalPosition = true;
         [SerializeField] bool findTargetsOnStart = true;
 
         Vector3 velocity;
@@ -25,6 +26,7 @@ namespace TarTulla.CameraSystems
         float VerticalOffset => GetCameraValue(c => c.verticalOffset, verticalOffset);
         bool AllowSmallDownwardCorrection => GetCameraBool(c => c.allowSmallDownwardCorrection, allowSmallDownwardCorrection);
         float MaxDownwardCorrection => GetCameraValue(c => c.maxDownwardCorrection, maxDownwardCorrection);
+        bool LockHorizontalPosition => GetCameraBool(c => c.lockHorizontalPosition, lockHorizontalPosition);
 
         void Start()
         {
@@ -54,7 +56,9 @@ namespace TarTulla.CameraSystems
                 : highestY;
             float desiredY = Mathf.Max(targetY, minAllowedY);
 
-            float targetX = Mathf.Clamp(midpoint.x * horizontalFollow, -maxHorizontalOffset, maxHorizontalOffset);
+            float targetX = LockHorizontalPosition
+                ? 0f
+                : Mathf.Clamp(midpoint.x * horizontalFollow, -maxHorizontalOffset, maxHorizontalOffset);
             var desiredPosition = new Vector3(targetX, desiredY, transform.position.z);
             transform.position = Vector3.SmoothDamp(transform.position, desiredPosition, ref velocity, SmoothTime);
         }
@@ -84,7 +88,9 @@ namespace TarTulla.CameraSystems
             }
 
             Vector2 midpoint = (targetA.position + targetB.position) * 0.5f;
-            float targetX = Mathf.Clamp(midpoint.x * horizontalFollow, -maxHorizontalOffset, maxHorizontalOffset);
+            float targetX = LockHorizontalPosition
+                ? 0f
+                : Mathf.Clamp(midpoint.x * horizontalFollow, -maxHorizontalOffset, maxHorizontalOffset);
             var position = new Vector3(targetX, midpoint.y + VerticalOffset, transform.position.z);
             ResetToTarget(position);
         }

@@ -73,6 +73,15 @@ namespace TarTulla.Core
 
             progressTracker.Tick();
 
+            if (levelBuilder != null && levelBuilder.UsesProceduralGeneration)
+            {
+                float midpointY = (tar.position.y + tulla.position.y) * 0.5f;
+                levelBuilder.EnsurePlatformsAhead(midpointY);
+
+                if (cameraFollow != null)
+                    levelBuilder.CleanupOldPlatforms(cameraFollow.transform.position.y);
+            }
+
             if (!resetPending && HasFailed())
                 BeginResetRun();
         }

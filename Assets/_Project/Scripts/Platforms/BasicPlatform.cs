@@ -29,6 +29,13 @@ namespace TarTulla.Platforms
             ApplyOneWaySetup();
         }
 
+        public void Configure(bool oneWayBehavior, float arc)
+        {
+            useOneWayBehavior = oneWayBehavior;
+            surfaceArc = arc;
+            ApplyOneWaySetup();
+        }
+
         public void ApplyOneWaySetup()
         {
             var box = GetComponent<BoxCollider2D>();

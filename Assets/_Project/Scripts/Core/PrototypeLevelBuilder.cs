@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using TarTulla.CameraSystems;
 using TarTulla.Characters;
@@ -24,6 +25,7 @@ namespace TarTulla.Core
         [SerializeField] AirControlSettings airControlSettings;
         [SerializeField] VerticalCameraFollow2D cameraFollow;
         [SerializeField] bool buildOnPlay;
+        [SerializeField] bool enableStreamDebugLogs;
 
         [Header("Generation Fallback")]
         [SerializeField] int platformCount = 24;
@@ -39,61 +41,27 @@ namespace TarTulla.Core
         [SerializeField] float jumperRadius = 0.35f;
         [SerializeField] float jumperSpawnHeightAboveStart = 1.15f;
 
+        readonly List<GameObject> generatedPlatforms = new();
+
+        PlatformGenerationSettings activeSettings;
+        int activeSeed;
+        float highestGeneratedY;
+        Vector2 lastPlatformPosition;
+        int lastHorizontalDirection = 1;
+        int generatedPlatformIndex;
+        float previousPlatformWidth;
+
         public Transform TarTransform { get; private set; }
         public Transform TullaTransform { get; private set; }
-
         public float StartBaselineY => GetPlatformSettings().startY;
-
-        PlatformGenerationSettings GetPlatformSettings()
-        {
-            var profile = TarTullaTuningAccess.GetActiveProfile();
-            if (profile != null)
-            {
-                var p = profile.Platforms;
-                return new PlatformGenerationSettings
-                {
-                    platformCount = p.platformCount,
-                    seed = p.seed,
-                    startY = p.startY,
-                    verticalSpacingMin = p.verticalSpacingMin,
-                    verticalSpacingMax = p.verticalSpacingMax,
-                    horizontalRange = p.horizontalRange,
-                    platformWidth = p.platformWidth,
-                    platformHeight = p.platformHeight,
-                    gravityScale = profile.Character.gravityScale
-                };
-            }
-
-            return new PlatformGenerationSettings
-            {
-                platformCount = platformCount,
-                seed = generationSeed,
-                startY = startY,
-                verticalSpacingMin = verticalSpacingMin,
-                verticalSpacingMax = verticalSpacingMax,
-                horizontalRange = horizontalRange,
-                platformWidth = platformWidth,
-                platformHeight = platformHeight,
-                gravityScale = 3f
-            };
-        }
-
-        struct PlatformGenerationSettings
-        {
-            public int platformCount;
-            public int seed;
-            public float startY;
-            public float verticalSpacingMin;
-            public float verticalSpacingMax;
-            public float horizontalRange;
-            public float platformWidth;
-            public float platformHeight;
-            public float gravityScale;
-        }
+        public float HighestGeneratedY => highestGeneratedY;
+        public int ActivePlatformCount => generatedPlatforms.Count;
+        public bool UsesProceduralGeneration => activeSettings.useProceduralGeneration;
 
         void Awake()
         {
             ResolveRoots();
+            activeSettings = GetPlatformSettings();
 
             if (buildOnPlay)
                 BuildPrototypeLayout();
@@ -104,9 +72,7 @@ namespace TarTulla.Core
         {
             ResolveRoots();
 
-            bool hasProfile = TarTullaTuningAccess.HasActiveProfile;
-
-            if (!hasProfile)
+            if (!TarTullaTuningAccess.HasActiveProfile)
             {
                 if (characterSettings == null || ropeSettings == null)
                 {
@@ -122,20 +88,21 @@ namespace TarTulla.Core
             }
 
             ClearGeneratedContent();
-            var platformSettings = GetPlatformSettings();
+            activeSettings = GetPlatformSettings();
+            BeginGeneratorRun(activeSettings);
 
-            Debug.Log(
-                $"[Tar&Tulla][Builder] Using {(hasProfile ? TarTullaTuningAccess.GetActiveProfile().name : "fallback")} " +
-                $"platformCount={platformSettings.platformCount}, horizontalRange={platformSettings.horizontalRange}, seed={platformSettings.seed}");
+            int initialCount = activeSettings.useProceduralGeneration
+                ? activeSettings.initialPlatformCount
+                : activeSettings.platformCount;
 
-            BuildPlatforms(platformSettings);
+            GeneratePlatformCount(initialCount);
 
-            var tarStart = new Vector2(-0.75f, platformSettings.startY + jumperSpawnHeightAboveStart);
-            var tullaStart = new Vector2(0.75f, platformSettings.startY + jumperSpawnHeightAboveStart);
+            var tarStart = new Vector2(-0.75f, activeSettings.startY + jumperSpawnHeightAboveStart);
+            var tullaStart = new Vector2(0.75f, activeSettings.startY + jumperSpawnHeightAboveStart);
 
             var tiltInput = EnsureMobileTiltInput();
-            var tar = CreateJumper(TarObjectName, tarStart, new Color(0.35f, 0.75f, 0.95f), tiltInput, platformSettings.gravityScale);
-            var tulla = CreateJumper(TullaObjectName, tullaStart, new Color(0.95f, 0.55f, 0.35f), tiltInput, platformSettings.gravityScale);
+            var tar = CreateJumper(TarObjectName, tarStart, new Color(0.35f, 0.75f, 0.95f), tiltInput, activeSettings.gravityScale);
+            var tulla = CreateJumper(TullaObjectName, tullaStart, new Color(0.95f, 0.55f, 0.35f), tiltInput, activeSettings.gravityScale);
 
             TarTransform = tar.transform;
             TullaTransform = tulla.transform;
@@ -143,7 +110,341 @@ namespace TarTulla.Core
             CreateRope(tar, tulla);
             WireCamera(tar.transform, tulla.transform);
 
-            Debug.Log($"[Tar&Tulla] Prototype layout built ({platformSettings.platformCount} platforms, seed {platformSettings.seed}).");
+            LogStream(
+                $"mode={(activeSettings.useProceduralGeneration ? "procedural" : "fixed")}, seed={activeSeed}, " +
+                $"generated={generatedPlatformIndex}, highestY={highestGeneratedY:F1}, active={generatedPlatforms.Count}");
+
+            if (enableStreamDebugLogs)
+            {
+                var sampleBounds = ResolveHorizontalBounds(activeSettings, activeSettings.platformWidth);
+                LogStream(
+                    $"playfield camHalfW={sampleBounds.cameraHalfWidth:F2}, margin={activeSettings.screenHorizontalMargin:F2}, " +
+                    $"effectiveHalfRange={sampleBounds.effectiveHalfRange:F2}, platformW={activeSettings.platformWidth:F2}");
+            }
+
+            Debug.Log($"[Tar&Tulla] Prototype layout built ({generatedPlatformIndex} platforms, seed {activeSeed}).");
+        }
+
+        public void EnsurePlatformsAhead(float referenceY)
+        {
+            if (!activeSettings.useProceduralGeneration)
+                return;
+
+            float targetY = referenceY + activeSettings.platformBufferAhead;
+            int placed = 0;
+
+            while (highestGeneratedY < targetY && generatedPlatforms.Count < activeSettings.maxActivePlatforms)
+            {
+                float segmentCeiling = highestGeneratedY + activeSettings.generationSegmentHeight;
+                float batchTarget = Mathf.Min(targetY, segmentCeiling);
+
+                while (highestGeneratedY < batchTarget && generatedPlatforms.Count < activeSettings.maxActivePlatforms)
+                {
+                    PlaceNextPlatform();
+                    placed++;
+                }
+
+                if (highestGeneratedY >= targetY)
+                    break;
+
+                if (placed == 0)
+                    break;
+            }
+
+            if (enableStreamDebugLogs && placed > 0)
+            {
+                LogStream(
+                    $"EnsureAhead refY={referenceY:F1}, placed={placed}, highestY={highestGeneratedY:F1}, active={generatedPlatforms.Count}");
+            }
+        }
+
+        public int CleanupOldPlatforms(float cameraY)
+        {
+            if (!activeSettings.useProceduralGeneration)
+                return 0;
+
+            float threshold = cameraY - activeSettings.cleanupDistanceBelowCamera;
+            int removed = 0;
+
+            for (int i = generatedPlatforms.Count - 1; i >= 0; i--)
+            {
+                var platform = generatedPlatforms[i];
+                if (platform == null)
+                {
+                    generatedPlatforms.RemoveAt(i);
+                    continue;
+                }
+
+                if (platform.transform.position.y >= threshold)
+                    continue;
+
+                DestroyImmediateSafe(platform);
+                generatedPlatforms.RemoveAt(i);
+                removed++;
+            }
+
+            if (enableStreamDebugLogs && removed > 0)
+                LogStream($"Cleanup cameraY={cameraY:F1}, removed={removed}, active={generatedPlatforms.Count}");
+
+            return removed;
+        }
+
+        public void ClearGeneratedLayout()
+        {
+            DestroyChildren(levelRoot);
+            generatedPlatforms.Clear();
+            ResetGeneratorState();
+        }
+
+        public void ClearGeneratedContent()
+        {
+            DestroyChildren(charactersRoot);
+            ClearGeneratedLayout();
+
+            if (systemsRoot == null)
+                return;
+
+            DestroyIfExists(RopeObjectName);
+        }
+
+        void BeginGeneratorRun(PlatformGenerationSettings settings)
+        {
+            activeSettings = settings;
+            activeSeed = settings.randomizeSeedOnRun ? Random.Range(1, int.MaxValue) : settings.seed;
+            ResetGeneratorState();
+            Random.InitState(activeSeed);
+        }
+
+        void ResetGeneratorState()
+        {
+            generatedPlatforms.Clear();
+            generatedPlatformIndex = 0;
+            lastHorizontalDirection = 1;
+            previousPlatformWidth = activeSettings.platformWidth * activeSettings.safeLandingWidthMultiplier;
+            highestGeneratedY = activeSettings.startY;
+            lastPlatformPosition = new Vector2(0f, activeSettings.startY);
+        }
+
+        void GeneratePlatformCount(int count)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                if (generatedPlatforms.Count >= activeSettings.maxActivePlatforms)
+                    break;
+
+                PlaceNextPlatform();
+            }
+        }
+
+        void PlaceNextPlatform()
+        {
+            var s = activeSettings;
+            int index = generatedPlatformIndex;
+            bool isEasy = index < s.easyStartPlatformCount;
+            int recoveryEvery = s.recoveryPlatformEvery > 0 ? s.recoveryPlatformEvery : s.wideRecoveryPlatformEvery;
+            bool isRecovery = recoveryEvery > 0 && index > 0 && index % recoveryEvery == 0;
+
+            float currentX = lastPlatformPosition.x;
+            float currentY = lastPlatformPosition.y;
+
+            if (index > 0)
+            {
+                float difficulty = GetDifficultyFactor(currentY);
+                float spacingMin = isEasy ? s.minVerticalGap : s.verticalSpacingMin;
+                float spacingMax = isEasy
+                    ? Mathf.Min(s.verticalSpacingMin, s.maxVerticalGap)
+                    : Mathf.Lerp(s.verticalSpacingMax, s.maxVerticalSpacingAtHighDifficulty, difficulty);
+
+                float spacing = Random.Range(spacingMin, spacingMax);
+                spacing = Mathf.Clamp(spacing, s.minVerticalGap, s.maxVerticalGap);
+                currentY += spacing;
+            }
+            else
+            {
+                currentX = 0f;
+                currentY = s.startY;
+            }
+
+            float width = ResolvePlatformWidth(s, index, isEasy, isRecovery, currentY);
+
+            if (index > 0)
+            {
+                if (isEasy)
+                {
+                    float step = Random.Range(s.maxHorizontalGap * 0.15f, s.maxHorizontalGap * 0.45f);
+                    currentX = Mathf.Clamp(
+                        currentX + lastHorizontalDirection * step,
+                        -s.horizontalRange * 0.5f,
+                        s.horizontalRange * 0.5f);
+                }
+                else
+                {
+                    if (s.forceAlternatingPattern)
+                        lastHorizontalDirection *= -1;
+                    else if (Random.value < s.horizontalDirectionChangeChance)
+                        lastHorizontalDirection = Random.value < 0.5f ? -1 : 1;
+
+                    float step = Random.Range(s.maxHorizontalGap * 0.35f, s.maxHorizontalGap);
+                    float proposedX = currentX + lastHorizontalDirection * step;
+                    float maxCenterDelta = Mathf.Max(s.maxHorizontalGap, (width + previousPlatformWidth) * 0.5f);
+                    proposedX = Mathf.Clamp(proposedX, currentX - maxCenterDelta, currentX + maxCenterDelta);
+                    currentX = Mathf.Clamp(proposedX, -s.horizontalRange, s.horizontalRange);
+                }
+            }
+
+            var bounds = ResolveHorizontalBounds(s, width);
+            if (s.clampPlatformsToVisibleWidth)
+            {
+                float clampedX = Mathf.Clamp(currentX, -bounds.effectiveHalfRange, bounds.effectiveHalfRange);
+                if (enableStreamDebugLogs && generatedPlatformIndex < 3)
+                {
+                    LogStream(
+                        $"clamp idx={index} camHalfW={bounds.cameraHalfWidth:F2}, platformW={width:F2}, " +
+                        $"margin={s.screenHorizontalMargin:F2}, effectiveHalf={bounds.effectiveHalfRange:F2}, x={currentX:F2}->{clampedX:F2}");
+                }
+
+                currentX = clampedX;
+            }
+
+            var position = new Vector2(currentX, currentY);
+            var platform = CreatePlatform($"Platform_{index + 1}", position, new Vector2(width, s.platformHeight), s);
+            generatedPlatforms.Add(platform);
+
+            lastPlatformPosition = position;
+            highestGeneratedY = currentY;
+            previousPlatformWidth = width;
+            generatedPlatformIndex++;
+        }
+
+        float ResolvePlatformWidth(PlatformGenerationSettings s, int index, bool isEasy, bool isRecovery, float platformY)
+        {
+            if (index == 0)
+                return s.platformWidth * s.safeLandingWidthMultiplier;
+
+            if (isRecovery)
+            {
+                float baseWidth = s.widthVariationEnabled ? s.platformWidthMax : s.platformWidth;
+                return baseWidth * s.recoveryPlatformWidthMultiplier;
+            }
+
+            if (isEasy)
+                return s.platformWidth * s.safeLandingWidthMultiplier;
+
+            float width;
+            if (!s.widthVariationEnabled)
+                width = s.platformWidth;
+            else if (Random.value < s.narrowPlatformChance)
+                width = s.platformWidthMin;
+            else
+                width = Random.Range(s.platformWidthMin, s.platformWidthMax);
+
+            if (s.difficultyRampEnabled)
+            {
+                float difficulty = GetDifficultyFactor(platformY);
+                width = Mathf.Lerp(width, s.minPlatformWidthAtHighDifficulty, difficulty);
+            }
+
+            return width;
+        }
+
+        float GetDifficultyFactor(float platformY)
+        {
+            if (!activeSettings.difficultyRampEnabled)
+                return 0f;
+
+            float heightAboveStart = platformY - activeSettings.startY;
+            if (heightAboveStart <= activeSettings.difficultyRampStartHeight)
+                return 0f;
+
+            float rampRange = Mathf.Max(40f, activeSettings.difficultyRampStartHeight * 2f);
+            float normalized = (heightAboveStart - activeSettings.difficultyRampStartHeight) / rampRange;
+            return Mathf.Clamp01(normalized * activeSettings.difficultyRampStrength);
+        }
+
+        float ResolveCameraHalfWidth(PlatformGenerationSettings settings)
+        {
+            if (settings.useCameraBasedHorizontalBounds && Camera.main != null)
+                return Camera.main.orthographicSize * Camera.main.aspect;
+
+            return settings.manualHalfWidthFallback;
+        }
+
+        HorizontalPlayfieldBounds ResolveHorizontalBounds(PlatformGenerationSettings settings, float platformWidth)
+        {
+            float cameraHalfWidth = ResolveCameraHalfWidth(settings);
+            float platformHalfWidth = platformWidth * 0.5f;
+            float allowedHalfX = Mathf.Max(0f, cameraHalfWidth - platformHalfWidth - settings.screenHorizontalMargin);
+            float effectiveHalfRange = settings.clampPlatformsToVisibleWidth
+                ? Mathf.Min(settings.horizontalRange, allowedHalfX)
+                : settings.horizontalRange;
+
+            return new HorizontalPlayfieldBounds
+            {
+                cameraHalfWidth = cameraHalfWidth,
+                allowedHalfX = allowedHalfX,
+                effectiveHalfRange = effectiveHalfRange
+            };
+        }
+
+        void OnDrawGizmos()
+        {
+            var settings = Application.isPlaying ? activeSettings : GetPlatformSettings();
+            if (!settings.drawPlayfieldBoundsGizmos)
+                return;
+
+            float cameraHalfWidth = ResolveCameraHalfWidth(settings);
+            float left = -cameraHalfWidth + settings.screenHorizontalMargin;
+            float right = cameraHalfWidth - settings.screenHorizontalMargin;
+            float yMin = settings.startY - 2f;
+            float yMax = Application.isPlaying ? highestGeneratedY + 12f : settings.startY + 32f;
+
+            Gizmos.color = new Color(0.2f, 0.85f, 1f, 0.9f);
+            Gizmos.DrawLine(new Vector3(left, yMin, 0f), new Vector3(left, yMax, 0f));
+            Gizmos.DrawLine(new Vector3(right, yMin, 0f), new Vector3(right, yMax, 0f));
+        }
+
+        GameObject CreatePlatform(string name, Vector2 position, Vector2 size, PlatformGenerationSettings settings)
+        {
+            var platform = new GameObject(name);
+            platform.transform.SetParent(levelRoot, false);
+            platform.transform.position = position;
+            platform.layer = LayerMask.NameToLayer("Default");
+
+            var renderer = platform.AddComponent<SpriteRenderer>();
+            renderer.sprite = CreateRectSprite();
+            renderer.color = new Color(0.55f, 0.58f, 0.62f);
+            platform.transform.localScale = new Vector3(size.x, size.y, 1f);
+
+            var collider = platform.AddComponent<BoxCollider2D>();
+            collider.size = Vector2.one;
+            collider.isTrigger = false;
+            collider.usedByEffector = settings.useOneWayPlatforms;
+
+            var rb = platform.AddComponent<Rigidbody2D>();
+            rb.bodyType = RigidbodyType2D.Static;
+
+            var basicPlatform = platform.AddComponent<BasicPlatform>();
+            basicPlatform.Configure(settings.useOneWayPlatforms, settings.oneWaySurfaceArc);
+            return platform;
+        }
+
+        PlatformGenerationSettings GetPlatformSettings()
+        {
+            var profile = TarTullaTuningAccess.GetActiveProfile();
+            if (profile != null)
+                return PlatformGenerationSettings.FromProfile(profile);
+
+            return PlatformGenerationSettings.CreateFallback(
+                platformCount, generationSeed, startY, verticalSpacingMin, verticalSpacingMax,
+                horizontalRange, platformWidth, platformHeight);
+        }
+
+        void LogStream(string message)
+        {
+            if (!enableStreamDebugLogs)
+                return;
+
+            Debug.Log($"[Tar&Tulla][Builder][Stream] {message}", this);
         }
 
         void ResolveRoots()
@@ -161,96 +462,6 @@ namespace TarTulla.Core
             systemsRoot ??= gameRoot.Find("Systems");
 
             cameraFollow ??= FindFirstObjectByType<VerticalCameraFollow2D>();
-        }
-
-        public void ClearGeneratedContent()
-        {
-            DestroyChildren(charactersRoot);
-            DestroyChildren(levelRoot);
-
-            if (systemsRoot == null)
-                return;
-
-            DestroyIfExists(RopeObjectName);
-        }
-
-        void BuildPlatforms(PlatformGenerationSettings platformSettings)
-        {
-            var state = Random.state;
-            Random.InitState(platformSettings.seed);
-
-            float currentY = platformSettings.startY;
-            float currentX = 0f;
-            float previousWidth = platformSettings.platformWidth + 1.2f;
-
-            for (int i = 0; i < platformSettings.platformCount; i++)
-            {
-                float width = platformSettings.platformWidth;
-                float spacingMin = platformSettings.verticalSpacingMin;
-                float spacingMax = platformSettings.verticalSpacingMax;
-                float xRange = platformSettings.horizontalRange;
-
-                if (i == 0)
-                {
-                    width = platformSettings.platformWidth + 1.2f;
-                    currentX = 0f;
-                }
-                else if (i <= 5)
-                {
-                    width = platformSettings.platformWidth + 0.4f;
-                    xRange *= 0.35f;
-                    spacingMax = platformSettings.verticalSpacingMin + 0.6f;
-                    currentX = Mathf.Clamp(
-                        currentX + Random.Range(-xRange, xRange),
-                        -platformSettings.horizontalRange * 0.5f,
-                        platformSettings.horizontalRange * 0.5f);
-                }
-                else
-                {
-                    float direction = (i % 2 == 0) ? 1f : -1f;
-                    float step = Random.Range(xRange * 0.35f, xRange);
-                    float proposedX = currentX + direction * step;
-                    float maxCenterDelta = (width + previousWidth) * 0.5f;
-                    proposedX = Mathf.Clamp(proposedX, currentX - maxCenterDelta, currentX + maxCenterDelta);
-                    currentX = Mathf.Clamp(proposedX, -platformSettings.horizontalRange, platformSettings.horizontalRange);
-                    width = Mathf.Max(2.6f, platformSettings.platformWidth - 0.2f);
-                }
-
-                if (i > 0)
-                {
-                    float spacing = Random.Range(spacingMin, spacingMax);
-                    currentY += spacing;
-                }
-
-                CreatePlatform($"Platform_{i + 1}", new Vector2(currentX, currentY), new Vector2(width, platformSettings.platformHeight));
-                previousWidth = width;
-            }
-
-            Random.state = state;
-        }
-
-        void CreatePlatform(string name, Vector2 position, Vector2 size)
-        {
-            var platform = new GameObject(name);
-            platform.transform.SetParent(levelRoot, false);
-            platform.transform.position = position;
-            platform.layer = LayerMask.NameToLayer("Default");
-
-            var renderer = platform.AddComponent<SpriteRenderer>();
-            renderer.sprite = CreateRectSprite();
-            renderer.color = new Color(0.55f, 0.58f, 0.62f);
-            platform.transform.localScale = new Vector3(size.x, size.y, 1f);
-
-            var collider = platform.AddComponent<BoxCollider2D>();
-            collider.size = Vector2.one;
-            collider.isTrigger = false;
-            collider.usedByEffector = true;
-
-            var rb = platform.AddComponent<Rigidbody2D>();
-            rb.bodyType = RigidbodyType2D.Static;
-
-            var basicPlatform = platform.AddComponent<BasicPlatform>();
-            basicPlatform.ApplyOneWaySetup();
         }
 
         JumperController2D CreateJumper(string name, Vector2 position, Color color, MobileTiltInput2D tiltInput, float gravityScale)
@@ -394,6 +605,163 @@ namespace TarTulla.Core
                 Destroy(target);
             else
                 DestroyImmediate(target);
+        }
+
+        struct PlatformGenerationSettings
+        {
+            public string profileName;
+            public bool useProceduralGeneration;
+            public int platformCount;
+            public int initialPlatformCount;
+            public float platformBufferAhead;
+            public float cleanupDistanceBelowCamera;
+            public int maxActivePlatforms;
+            public float generationSegmentHeight;
+            public bool randomizeSeedOnRun;
+            public bool difficultyRampEnabled;
+            public float difficultyRampStartHeight;
+            public float difficultyRampStrength;
+            public float minPlatformWidthAtHighDifficulty;
+            public float maxVerticalSpacingAtHighDifficulty;
+            public int recoveryPlatformEvery;
+            public float recoveryPlatformWidthMultiplier;
+            public int seed;
+            public float startY;
+            public float verticalSpacingMin;
+            public float verticalSpacingMax;
+            public float minVerticalGap;
+            public float maxVerticalGap;
+            public float horizontalRange;
+            public float maxHorizontalGap;
+            public float horizontalDirectionChangeChance;
+            public bool forceAlternatingPattern;
+            public float platformWidth;
+            public float platformHeight;
+            public bool widthVariationEnabled;
+            public float platformWidthMin;
+            public float platformWidthMax;
+            public float narrowPlatformChance;
+            public int wideRecoveryPlatformEvery;
+            public int easyStartPlatformCount;
+            public float safeLandingWidthMultiplier;
+            public bool useOneWayPlatforms;
+            public float oneWaySurfaceArc;
+            public bool useCameraBasedHorizontalBounds;
+            public float screenHorizontalMargin;
+            public bool clampPlatformsToVisibleWidth;
+            public float manualHalfWidthFallback;
+            public bool drawPlayfieldBoundsGizmos;
+            public float gravityScale;
+
+            public static PlatformGenerationSettings FromProfile(TarTullaGameplayProfile profile)
+            {
+                var p = profile.Platforms;
+                return new PlatformGenerationSettings
+                {
+                    profileName = profile.name,
+                    useProceduralGeneration = p.useProceduralGeneration,
+                    platformCount = p.platformCount,
+                    initialPlatformCount = p.initialPlatformCount,
+                    platformBufferAhead = p.platformBufferAhead,
+                    cleanupDistanceBelowCamera = p.cleanupDistanceBelowCamera,
+                    maxActivePlatforms = p.maxActivePlatforms,
+                    generationSegmentHeight = p.generationSegmentHeight,
+                    randomizeSeedOnRun = p.randomizeSeedOnRun,
+                    difficultyRampEnabled = p.difficultyRampEnabled,
+                    difficultyRampStartHeight = p.difficultyRampStartHeight,
+                    difficultyRampStrength = p.difficultyRampStrength,
+                    minPlatformWidthAtHighDifficulty = p.minPlatformWidthAtHighDifficulty,
+                    maxVerticalSpacingAtHighDifficulty = p.maxVerticalSpacingAtHighDifficulty,
+                    recoveryPlatformEvery = p.recoveryPlatformEvery,
+                    recoveryPlatformWidthMultiplier = p.recoveryPlatformWidthMultiplier,
+                    seed = p.seed,
+                    startY = p.startY,
+                    verticalSpacingMin = p.verticalSpacingMin,
+                    verticalSpacingMax = p.verticalSpacingMax,
+                    minVerticalGap = p.minVerticalGap,
+                    maxVerticalGap = p.maxVerticalGap,
+                    horizontalRange = p.horizontalRange,
+                    maxHorizontalGap = p.maxHorizontalGap,
+                    horizontalDirectionChangeChance = p.horizontalDirectionChangeChance,
+                    forceAlternatingPattern = p.forceAlternatingPattern,
+                    platformWidth = p.platformWidth,
+                    platformHeight = p.platformHeight,
+                    widthVariationEnabled = p.widthVariationEnabled,
+                    platformWidthMin = p.platformWidthMin,
+                    platformWidthMax = p.platformWidthMax,
+                    narrowPlatformChance = p.narrowPlatformChance,
+                    wideRecoveryPlatformEvery = p.wideRecoveryPlatformEvery,
+                    easyStartPlatformCount = p.easyStartPlatformCount,
+                    safeLandingWidthMultiplier = p.safeLandingWidthMultiplier,
+                    useOneWayPlatforms = p.useOneWayPlatforms,
+                    oneWaySurfaceArc = p.oneWaySurfaceArc,
+                    useCameraBasedHorizontalBounds = p.useCameraBasedHorizontalBounds,
+                    screenHorizontalMargin = p.screenHorizontalMargin,
+                    clampPlatformsToVisibleWidth = p.clampPlatformsToVisibleWidth,
+                    manualHalfWidthFallback = p.manualHalfWidthFallback,
+                    drawPlayfieldBoundsGizmos = p.drawPlayfieldBoundsGizmos,
+                    gravityScale = profile.Character.gravityScale
+                };
+            }
+
+            public static PlatformGenerationSettings CreateFallback(
+                int count, int fallbackSeed, float fallbackStartY,
+                float spacingMin, float spacingMax, float range, float width, float height)
+            {
+                return new PlatformGenerationSettings
+                {
+                    profileName = "fallback",
+                    useProceduralGeneration = true,
+                    platformCount = count,
+                    initialPlatformCount = 12,
+                    platformBufferAhead = 18f,
+                    cleanupDistanceBelowCamera = 14f,
+                    maxActivePlatforms = 40,
+                    generationSegmentHeight = 10f,
+                    randomizeSeedOnRun = false,
+                    difficultyRampEnabled = true,
+                    difficultyRampStartHeight = 25f,
+                    difficultyRampStrength = 0.25f,
+                    minPlatformWidthAtHighDifficulty = 1.8f,
+                    maxVerticalSpacingAtHighDifficulty = 3.2f,
+                    recoveryPlatformEvery = 7,
+                    recoveryPlatformWidthMultiplier = 1.35f,
+                    seed = fallbackSeed,
+                    startY = fallbackStartY,
+                    verticalSpacingMin = spacingMin,
+                    verticalSpacingMax = spacingMax,
+                    minVerticalGap = 1.5f,
+                    maxVerticalGap = 3f,
+                    horizontalRange = range,
+                    maxHorizontalGap = 2.2f,
+                    horizontalDirectionChangeChance = 0.55f,
+                    forceAlternatingPattern = false,
+                    platformWidth = width,
+                    platformHeight = height,
+                    widthVariationEnabled = false,
+                    platformWidthMin = 1.8f,
+                    platformWidthMax = 3.4f,
+                    narrowPlatformChance = 0.15f,
+                    wideRecoveryPlatformEvery = 6,
+                    easyStartPlatformCount = 5,
+                    safeLandingWidthMultiplier = 1.25f,
+                    useOneWayPlatforms = true,
+                    oneWaySurfaceArc = 150f,
+                    useCameraBasedHorizontalBounds = true,
+                    screenHorizontalMargin = 0.35f,
+                    clampPlatformsToVisibleWidth = true,
+                    manualHalfWidthFallback = 4f,
+                    drawPlayfieldBoundsGizmos = true,
+                    gravityScale = 3f
+                };
+            }
+        }
+
+        struct HorizontalPlayfieldBounds
+        {
+            public float cameraHalfWidth;
+            public float allowedHalfX;
+            public float effectiveHalfRange;
         }
     }
 }
