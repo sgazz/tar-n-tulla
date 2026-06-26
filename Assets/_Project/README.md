@@ -50,6 +50,8 @@ Profiles live in `Settings/GameplayProfiles/`.
 | `TarTulla_SoftRope` | Longer rope, softer spring, relaxed feel |
 | `TarTulla_ExtremeTest` | Extreme values — use to verify profile wiring |
 
+**Tuning Lab** (`TuningLab/`): five Pass 1 presets — see [Game Feel Tuning Pass 1](#game-feel-tuning-pass-1).
+
 Each profile groups tuning into:
 
 - **Character** — jump, gravity, landing
@@ -58,6 +60,8 @@ Each profile groups tuning into:
 - **Camera** — follow behavior
 - **Platforms** — procedural layout
 - **RunRules** — fail distance, reset delay
+- **Feedback** — camera impulse, haptics, danger vignette, height milestones
+- **Onboarding** — countdown, tutorial hints, first-run flags
 
 Profile field names stay in **English** (for code and assets). Unity Inspector **tooltips are in Serbian** to make tuning faster — hover any field in a `TarTullaGameplayProfile` asset to read it.
 
@@ -93,6 +97,76 @@ Expected feel:
 
 ---
 
+## Game Feel Tuning Pass 1
+
+Structured tuning lab for core motion feel on **physical device**. No new mechanics — profile presets + debug readability only.
+
+### Location
+
+```
+Settings/GameplayProfiles/TuningLab/
+├── TarTulla_Tuning_A_DefaultControl.asset   ← baseline for comparison
+├── TarTulla_Tuning_B_TightRhythm.asset
+├── TarTulla_Tuning_C_SoftFloat.asset
+├── TarTulla_Tuning_D_StrongRescue.asset
+├── TarTulla_Tuning_E_FastClimb.asset
+└── TuningTestNotes.md                       ← device test score sheet
+```
+
+### Tuning profiles
+
+| Profile | Purpose | Main levers |
+|---------|---------|-------------|
+| **A — Default Control** | Balanced baseline, same as working prototype | Reference for all tests |
+| **B — Tight Rhythm** | Shorter rope, tighter gaps, rhythmic Tar/Tulla | ↑ jump/gravity, ↓ rope length, ↑ spring/damping, ↓ platform gaps, faster camera |
+| **C — Soft Float** | Forgiving, relaxed, floaty | ↓ gravity, longer/softer rope, wider platforms, slower camera, ↑ air control |
+| **D — Strong Rescue** | Visible partner save moments | ↑ pullAssist, ↑ rope feedback/haptics, fair platforms |
+| **E — Fast Climb** | High vertical pace, advanced feel | ↑ jump/gravity/fall speed, ↑ tilt speed, larger gaps, faster camera |
+
+**Baseline for Pass 1:** `TarTulla_Tuning_A_DefaultControl` — always compare B–E against this on device.
+
+### Assign a tuning profile
+
+1. Open `TarTulla_Prototype.unity`
+2. **Hierarchy** → `GameRoot` → `Systems` → **Tar Tulla Runtime**
+3. Set **Startup Profile** to a `TuningLab/` asset
+4. Enter Play Mode or build to device
+5. Start a new run (Main Menu → Start) so values apply from run prep
+
+### Device testing workflow
+
+1. Pick profile A first — play 2–3 minutes, note impressions in `TuningTestNotes.md`
+2. Switch profile on `TarTullaRuntime`, restart app/run
+3. Test B → C → D → E in order (or A between each for A/B comparison)
+4. **Do not change values while testing** — observe only
+5. Same device, portrait orientation, same grip every time
+
+### Developer HUD (optional)
+
+`UIRoot` → `UIManager` → enable **Show Developer Hud In Editor** (Editor / Development builds only).
+
+Displays live:
+
+- Active profile **displayName**
+- `jumpForce`, `gravityScale`
+- `restLength`, `springStrength`, `pullAssist`
+- `tiltSensitivity`
+- Active platform count, current height
+
+If HUD values **do not change** when switching profiles, fix profile wiring before continuing tuning.
+
+### Most important values (Pass 1)
+
+| Group | Fields | Affects |
+|-------|--------|---------|
+| Character | `jumpForce`, `gravityScale`, `maxFallSpeed` | Arc height, pace, landing rhythm |
+| Rope | `restLength`, `springStrength`, `pullAssistStrength`, `damping` | Pair tension, rescue, sling |
+| Tilt | `tiltSensitivity`, `airAcceleration`, `maxHorizontalAirSpeed` | Air steering, device feel |
+| Camera | `smoothTime`, `verticalOffset` | Readability vs responsiveness |
+| Platforms | `verticalSpacingMin/Max`, `platformWidth`, `recoveryPlatformEvery` | Difficulty, fairness, rhythm |
+
+---
+
 ## Milestone 1C — Vertical Climb Loop
 
 ### Status: Playable
@@ -118,7 +192,7 @@ GameRoot
 │   └── PrototypeRunController
 ├── LevelRoot                      (generated platforms)
 ├── CharactersRoot                 (generated Tar & Tulla)
-└── UIRoot                         (empty — no UI yet)
+└── UIRoot                         (UIManager + runtime UI canvas)
 
 Main Camera                        (VerticalCameraFollow2D)
 ```
@@ -126,11 +200,11 @@ Main Camera                        (VerticalCameraFollow2D)
 ### What Happens on Play
 
 1. `TarTullaRuntime` applies the startup profile.
-2. `PrototypeRunController` clears old content and builds the layout.
-3. Tar and Tulla spawn above the first platform.
-4. Auto-jump and rope physics begin.
-5. Camera follows upward progress.
-6. If **both** jumpers fall below `HighestReachedY - fallDistanceLimit`, the run resets.
+2. `PrototypeUIHierarchyBuilder` creates Canvas, panels, and EventSystem under `UIRoot`.
+3. `UIManager` shows the **Main Menu** (`Tap to Start`).
+4. After start: `PrototypeRunController` builds the layout, spawns Tar & Tulla, and enters **Playing**.
+5. Auto-jump and rope physics begin; HUD shows height and best.
+6. If **both** jumpers fall below `HighestReachedY - fallDistanceLimit`, **Game Over** appears with height and best.
 
 ### Profile Values That Affect the Climb Loop
 
@@ -153,15 +227,17 @@ Main Camera                        (VerticalCameraFollow2D)
 
 1. Open `Scenes/TarTulla_Prototype.unity`
 2. Set Game View to **9:16** portrait aspect
-3. Press **Play**
-4. Tar and Tulla should land on the first platform and begin climbing
+3. Press **Play** — Main Menu should appear first
+4. Tap **Tap to Start** — gameplay begins with HUD
 5. Use **A/D** or arrow keys for tilt air control (Editor keyboard fallback)
+6. Use **II** pause button (top-right) to test Pause / Resume / Restart / Main Menu
+7. Fall far below progress to trigger **Game Over** → Retry or Main Menu
 
 ### Editor Debug Keys
 
 | Key | Action |
 |-----|--------|
-| **R** | Full run reset — clears content, rebuilds layout, resets progress and camera |
+| **R** | Full run reset while Playing (bypasses UI flow) |
 | **B** | Rebuild layout only — same as R but without full run restart semantics |
 
 ### Physical Device
@@ -423,6 +499,351 @@ Wider platforms get a smaller allowed center range so the full platform stays on
 | Jumpers/rope swing off-screen | Not clamped yet — reduce `maxHorizontalGap`, tilt control, or enable soft bounds later |
 | Wrong aspect in editor | Match Game View to target device aspect (9:16) |
 | No Main Camera at build time | Set `manualHalfWidthFallback` to expected half-width (~4.5 for size 8 @ 9:16) |
+
+## Gameplay Feedback Layer (Prototype)
+
+**Status:** First lightweight feedback pass — placeholder feel, not final VFX/SFX/art.
+
+Goal: help the player read important moments (landing, rope tension, rescue pull, fall danger, height milestones) through subtle camera, haptics hooks, and simple UI overlays.
+
+### Profile tuning (`Feedback` group)
+
+On any `TarTullaGameplayProfile` asset:
+
+| Field | Purpose |
+|-------|---------|
+| `enableFeedback` | Master switch — disables entire feedback layer |
+| `enableCameraImpulse` | Subtle camera shake on landing / rope / danger |
+| `landingCameraImpulse` | Landing shake strength |
+| `ropeStretchCameraImpulse` | Overstretch shake strength |
+| `dangerCameraImpulse` | High-danger shake strength |
+| `enableHaptics` | Mobile vibration fallback (`Handheld.Vibrate`) |
+| `landingHapticStrength` | Landing vibration weight (0–1) |
+| `ropeStretchHapticStrength` | Rope overstretch vibration weight |
+| `dangerHapticStrength` | Fall-danger vibration weight |
+| `enableScreenDangerVignette` | Red/dark full-screen overlay when falling too far |
+| `dangerStartRatio` | Danger ratio where vignette begins (0–1) |
+| `dangerMaxAlpha` | Max vignette opacity at full danger |
+| `enableHeightMilestonePulse` | HUD pulse every N meters + new best |
+| `heightMilestoneInterval` | Meters between milestone pulses (default 10) |
+
+**Disable all feedback:** set `enableFeedback = false` on the active profile.
+
+### Event hub
+
+`Scripts/Core/GameplayFeedbackEvents.cs` — lightweight static events (not a general event bus):
+
+| Event | Source | Listeners |
+|-------|--------|-----------|
+| `OnJumperLanded` | `JumperController2D` | Camera, Haptics |
+| `OnJumpImpulse` | `JumperController2D` | (reserved for future SFX/VFX) |
+| `OnRopeOverstretched` | `ElasticRope2D` (0.2s cooldown) | Camera, Haptics |
+| `OnPullAssistTriggered` | `ElasticRope2D` (0.2s cooldown) | Haptics |
+| `OnDangerRatioChanged` | `PrototypeRunController` | Camera, Haptics, `DangerVignetteView` |
+| `OnNewBestHeight` | `ClimbProgressTracker` | `HeightMilestonePulseView` |
+| `OnHeightMilestone` | `ClimbProgressTracker` | `HeightMilestonePulseView` |
+
+### Components
+
+| Script | Location | Role |
+|--------|----------|------|
+| `CameraImpulse2D` | Main Camera | Additive offset read by `VerticalCameraFollow2D` — does not break follow |
+| `HapticsFeedbackController` | Systems | Mobile vibrate fallback with cooldowns |
+| `DangerVignetteView` | Canvas / SafeArea | Non-blocking red overlay by danger ratio |
+| `HeightMilestonePulseView` | HUDPanel child | Brief `+10m` / `New Best!` pulse |
+
+`PrototypeUIHierarchyBuilder` auto-adds vignette + milestone views on build or theme refresh.
+
+### Placeholder vs final
+
+| Now (placeholder) | Later |
+|-------------------|-------|
+| Solid-color danger overlay | Proper edge vignette sprite/shader |
+| `Handheld.Vibrate()` | Rich native haptics (iOS/Android) |
+| Random camera offset | Curated impulse curves |
+| Text scale pulse | Animated UI + particles |
+| No sound | Landing/rope/danger/milestone SFX |
+
+### Feedback testing checklist
+
+**Editor**
+
+- [ ] Landing → subtle camera impulse
+- [ ] Rope overstretch → subtle camera impulse (not every frame)
+- [ ] Fall near fail line → danger vignette fades in
+- [ ] Every `heightMilestoneInterval` meters → `+Nm` pulse
+- [ ] New best height → `New Best!` pulse
+- [ ] No feedback spam in console
+
+**Device**
+
+- [ ] Landing / pull / danger haptics noticeable but not annoying
+- [ ] HUD readable with vignette active
+- [ ] Camera follow stable
+- [ ] No performance regression
+
+**Tune first:** `landingCameraImpulse`, `dangerStartRatio`, `dangerMaxAlpha`, `heightMilestoneInterval`, haptic strengths.
+
+## Onboarding and Run Start Flow
+
+**Status:** First onboarding pass — countdown, tutorial hints, run summary. Not final tutorial art.
+
+### Flow
+
+```
+Boot → MainMenu
+MainMenu --Tap Start--> Ready (countdown, timeScale=0)
+Ready --Countdown done--> Playing (timeScale=1)
+Playing --first run--> Tutorial hints overlay (optional)
+Playing --Pause--> Paused
+Playing --OnRunFailed--> GameOver (summary + stats)
+GameOver --Retry--> Ready → Playing (same countdown flow)
+```
+
+Skip countdown when `Onboarding.showCountdown = false` on the active profile → MainMenu goes directly to Playing.
+
+### Profile tuning (`Onboarding` group)
+
+| Field | Purpose |
+|-------|---------|
+| `showCountdown` | Ready / 3 / 2 / 1 / Climb! before gameplay |
+| `countdownStepDuration` | Seconds per countdown step (unscaled time) |
+| `showTutorialHints` | Show first-run hint sequence |
+| `hintDuration` | Seconds each hint stays visible |
+| `rememberTutorialSeen` | Store seen flag in PlayerPrefs |
+
+### Scripts
+
+| Script | Role |
+|--------|------|
+| `RunCountdownView` | Countdown overlay (CanvasGroup fade, unscaled time) |
+| `TutorialHintView` | First-run hints during Playing |
+| `RunStatsTracker` | Landings + rope saves (via `GameplayFeedbackEvents`) |
+| `RunSummary` | Data struct for Game Over summary |
+| `SavedFeedbackView` | Brief “Saved!” on pull assist |
+
+### Run preparation
+
+`PrototypeRunController`:
+
+- `PrepareRun()` — builds layout, resets progress, **run paused** (no tick/fail logic)
+- `StartPreparedRun()` — unpauses run (physics active when `timeScale = 1`)
+- `StartRun()` — both in sequence (legacy/direct start)
+
+During countdown: `Time.timeScale = 0`, countdown uses `Time.unscaledDeltaTime`.
+
+### Tutorial PlayerPrefs
+
+Key: `TarTulla_TutorialSeen` (value `1` = seen)
+
+**Reset for testing:**
+
+- Context menu on `TutorialHintView` component → **Reset Tutorial Seen**
+- Or call `TutorialHintView.ResetTutorialSeen()` from code/console
+- Or `PlayerPrefs.DeleteKey("TarTulla_TutorialSeen")`
+
+### Game Over summary
+
+Shows:
+
+- Height / Best
+- **New Best!** badge when run beat previous session best
+- `Landings X · Saves Y` when stats > 0 (from `RunStatsTracker`)
+
+### Onboarding testing checklist
+
+**Editor**
+
+- [ ] Starts at Main Menu
+- [ ] Tap Start → countdown → gameplay
+- [ ] First run shows tutorial hints
+- [ ] Second run skips hints (if `rememberTutorialSeen`)
+- [ ] Game Over shows height, best, stats
+- [ ] Retry runs countdown again
+- [ ] Pause still works
+- [ ] `timeScale` never stuck at 0 after countdown/resume
+
+**Device**
+
+- [ ] Countdown readable
+- [ ] Hints readable, inside safe area
+- [ ] Tilt ready after countdown
+- [ ] UI does not block gameplay center
+
+## UI Foundation (Prototype)
+
+**Status:** UI/UX Pass 3 — visual identity foundation (theme, Tar/Tulla motif, rope line). Not final art.
+
+### Theme asset
+
+Location: `Assets/_Project/Settings/UI/TarTulla_UITheme_Default.asset`
+
+Script: `TarTullaUITheme.cs` — **Create → Tar&Tulla → UI Theme**
+
+Edit colors in the theme asset; assign on `UIRoot` → `PrototypeUIHierarchyBuilder` → **Theme**. `UIThemeApplier` applies on build.
+
+Key colors: Tar cyan (`accentColorTar`), Tulla orange (`accentColorTulla`), rope cream (`ropeColor`).
+
+### Scripts (`Scripts/UI/`)
+
+| Script | Role |
+|--------|------|
+| `UIState` | Boot, MainMenu, Ready, Playing, Paused, GameOver |
+| `UIManager` | State machine, safe transitions, `timeScale`, debug logs |
+| `TarTullaUITheme` | ScriptableObject palette |
+| `UIThemeApplier` | Applies theme to panels/texts/buttons |
+| `RopeLineUI` | UI line between two RectTransforms |
+| `UIPanelTransition` | Light fade on panel show |
+| `SafeAreaFitter` | Applies `Screen.safeArea` (notch/cutout) |
+| `UIStyleDefaults` | Fallback sizes + theme instance |
+| `MainMenuView` | Title, subtitle, motif, Tap to Start |
+| `HUDView` | Height / Best + climb hint + pause |
+| `PauseView` | Resume, Restart, Main Menu |
+| `GameOverView` | Motif, results, Retry / Main Menu |
+| `DeveloperHUDView` | Dev overlay (off by default) |
+| `DangerVignetteView` | Fall-danger red overlay (non-blocking) |
+| `RunCountdownView` | Pre-run countdown overlay |
+| `TutorialHintView` | First-run tutorial hints |
+| `SavedFeedbackView` | Brief “Saved!” on pull assist |
+| `HeightMilestonePulseView` | `+Nm` / `New Best!` HUD pulse |
+| `PrototypeUIHierarchyBuilder` | Builds themed Canvas on `UIRoot` |
+
+### Tar&Tulla motif
+
+Two colored dots (Tar/Tulla accents) + `RopeLineUI` on **Main Menu** and **Game Over**. No character art.
+
+### Scene hierarchy (runtime)
+
+```
+UIRoot
+├── EventSystem
+└── Canvas (1080×1920, match 0.5)
+    ├── CanvasBackground
+    ├── FullscreenBlocker
+    └── SafeArea (SafeAreaFitter)
+        ├── DangerVignette
+        ├── MainMenuPanel (+ PairMotif)
+        ├── HUDPanel (+ ClimbHint, HeightMilestonePulse)
+        ├── PausePanel
+        ├── GameOverPanel (+ PairMotif)
+        └── DeveloperHUDPanel
+```
+
+### SafeAreaFitter
+
+Attach to the `SafeArea` container (done automatically by `PrototypeUIHierarchyBuilder`).
+
+- Reads `Screen.safeArea` each frame when resolution or orientation changes
+- Sets anchor min/max on the target `RectTransform`
+- Keeps HUD and buttons inside iOS notch / Android cutout zones
+- Optional `enableDebugLogs` on the component (off by default)
+
+**Note:** If an old Canvas exists without `SafeArea`, the builder destroys and rebuilds it on next Play.
+
+### UI state flow
+
+```
+Boot → MainMenu
+MainMenu --Tap Start--> Ready (countdown)
+Ready --Countdown done--> Playing
+Playing --Pause--> Paused (timeScale=0)
+Paused --Resume--> Playing
+Paused --Restart--> Ready → Playing
+Paused --Main Menu--> MainMenu (StopRun)
+Playing --OnRunFailed--> GameOver (timeScale=0)
+GameOver --Retry--> Ready → Playing
+GameOver --Main Menu--> MainMenu (StopRun, timeScale=1)
+```
+
+`UIManager` always hides all panels before showing the active state. Invalid transitions are ignored (e.g. Pause only from Playing).
+
+Enable **Enable Debug Logs** on `UIManager` for `[Tar&Tulla][UI] State changed: ...` messages.
+
+### Main Menu start behavior
+
+- Play begins at **Main Menu** (`PrototypeRunController.autoStartOnPlay = false`)
+- **Tap to Start** → countdown (`Ready` state) → gameplay
+- Subtitle: *Two jumpers. One rope. Keep climbing.*
+
+### Pause behavior
+
+- `Time.timeScale = 0` — physics frozen
+- `FullscreenBlocker` dim + Pause panel inside SafeArea
+- Resume restores `timeScale = 1`
+- Restart calls `ResetRun()` (clear + rebuild layout)
+- Main Menu calls `StopRun()` and returns to menu
+
+### Game Over behavior
+
+- Triggered by `PrototypeRunController.OnRunFailed`
+- Shows `Height Xm` / `Best Ym`, optional **New Best!**, landings/saves stats
+- Retry: countdown flow → Playing
+- Main Menu: `timeScale = 1`, `StopRun()`, MainMenu state
+
+### Developer HUD
+
+Disabled by default. Enable on `UIManager` → **Show Developer Hud In Editor** or `DeveloperHUDView.showDeveloperHUD`.
+
+Shows: profile, UI state, height, best, platform count, tilt, rope stretch. Hidden in release builds.
+
+### Connection to gameplay
+
+`UIManager` → `PrototypeRunController` only:
+
+- `StartRun()` / `ResetRun()` / `StopRun()`
+- `SetRunPaused(bool)`
+- `OnRunFailed(float height, float bestHeight)`
+
+No circular dependencies. No physics in UI scripts.
+
+### Text rendering
+
+Unity UI `Text` + `LegacyRuntime.ttf`. TextMeshPro is not in the project yet — swap later without changing theme flow.
+
+HUD format: `Height 42m`, `Best 78m`.
+
+### Light transitions
+
+`UIPanelTransition` on Main Menu, Pause, Game Over — short fade-in (~0.12s). HUD stays instant. State logic always uses `HideInstant` when switching panels.
+
+### Still placeholder (final art pass later)
+
+- No character sprites, custom fonts, or TMP styling
+- No rounded panel corners (`panelCornerRadius` reserved)
+- No sound, settings, profile picker, monetization
+- Motif is geometric only (dots + line)
+- No progress bar — only subtle climb hint line in HUD
+
+### 9:16 mobile testing checklist
+
+**Editor**
+
+- [ ] Game View **9:16**
+- [ ] Play → Main Menu (not gameplay)
+- [ ] Tap Start → HUD + gameplay
+- [ ] Pause stops movement; Resume continues
+- [ ] Restart → clean run, no duplicate Tar/Tulla/platforms
+- [ ] Fall fail → Game Over with height/best
+- [ ] Retry → clean new run
+- [ ] Main Menu from Pause/Game Over → clean menu
+
+- [ ] Main Menu shows Tar/Tulla dots + rope line
+- [ ] Game Over shows motif above title
+- [ ] Retry button visually primary; Main Menu secondary
+- [ ] Dev HUD visually distinct (green-ish mono text, corner)
+
+**Device**
+
+- [ ] UI inside safe area (not under notch)
+- [ ] Theme colors readable in sunlight / dark mode
+- [ ] Buttons easy to tap (≥80px ref height)
+- [ ] HUD readable, pause reachable top-right
+- [ ] No clipped text on rounded corners
+
+### Intentionally not final
+
+- No custom art assets imported
+- Jumpers not soft-clamped to screen edges yet
 
 ## Design Documentation
 

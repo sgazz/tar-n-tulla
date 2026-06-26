@@ -452,7 +452,7 @@ namespace TarTulla.Core
             if (charactersRoot != null && levelRoot != null && systemsRoot != null)
                 return;
 
-            var bootstrap = FindFirstObjectByType<GameBootstrap>();
+            var bootstrap = FindAnyObjectByType<GameBootstrap>();
             if (bootstrap == null)
                 return;
 
@@ -461,7 +461,7 @@ namespace TarTulla.Core
             levelRoot ??= gameRoot.Find("LevelRoot");
             systemsRoot ??= gameRoot.Find("Systems");
 
-            cameraFollow ??= FindFirstObjectByType<VerticalCameraFollow2D>();
+            cameraFollow ??= FindAnyObjectByType<VerticalCameraFollow2D>();
         }
 
         JumperController2D CreateJumper(string name, Vector2 position, Color color, MobileTiltInput2D tiltInput, float gravityScale)
@@ -535,7 +535,7 @@ namespace TarTulla.Core
         void WireCamera(Transform tar, Transform tulla)
         {
             if (cameraFollow == null)
-                cameraFollow = FindFirstObjectByType<VerticalCameraFollow2D>();
+                cameraFollow = FindAnyObjectByType<VerticalCameraFollow2D>();
 
             cameraFollow?.SetTargets(tar, tulla);
         }

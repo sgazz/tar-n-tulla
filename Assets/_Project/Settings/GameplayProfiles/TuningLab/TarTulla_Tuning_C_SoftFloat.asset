@@ -1,0 +1,119 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 61e8845de9f143c7a7ded66d4716342c, type: 3}
+  m_Name: TarTulla_Tuning_C_SoftFloat
+  m_EditorClassIdentifier: 
+  profileId: tar_tulla_tuning_c_soft_float
+  displayName: Tuning C — Soft Float
+  description: "Mekši, oproštavajući osećaj — duži konopac, niža gravitacija, šire platforme. Relaxed feel, lakše čitanje, manje napetosti."
+  version: 1
+  Character:
+    jumpForce: 18.5
+    gravityScale: 2.4
+    maxFallSpeed: 22
+    horizontalDamping: 2
+    landingVelocityThreshold: 0.5
+    groundedGraceTime: 0.06
+    jumpCooldown: 0.12
+    useSoftHorizontalBoundsForJumpers: 0
+    jumperSoftBoundsForce: 0
+  Rope:
+    restLength: 3.6
+    maxLength: 5.2
+    springStrength: 38
+    damping: 7
+    pullAssistStrength: 18
+    lineWidth: 0.08
+    overstretchColorThreshold: 0.85
+    climbLeadPullFactor: 0.3
+    climbAnchorBoost: 2
+    climbSlingJumpMultiplier: 1.35
+  Tilt:
+    tiltSensitivity: 8.5
+    maxHorizontalAirSpeed: 6
+    airAcceleration: 24
+    groundedControlMultiplier: 0.15
+    airborneControlMultiplier: 1.15
+    inputDeadZone: 0.08
+    smoothing: 8
+  Camera:
+    verticalOffset: 1.5
+    smoothTime: 0.32
+    allowSmallDownwardCorrection: 1
+    maxDownwardCorrection: 1.5
+    lockHorizontalPosition: 1
+  Platforms:
+    platformCount: 25
+    startY: -2
+    seed: 1337
+    useProceduralGeneration: 1
+    initialPlatformCount: 12
+    platformBufferAhead: 18
+    cleanupDistanceBelowCamera: 14
+    maxActivePlatforms: 40
+    generationSegmentHeight: 10
+    randomizeSeedOnRun: 0
+    verticalSpacingMin: 2
+    verticalSpacingMax: 3
+    minVerticalGap: 1.6
+    maxVerticalGap: 3.2
+    horizontalRange: 2.6
+    maxHorizontalGap: 2
+    horizontalDirectionChangeChance: 0.5
+    forceAlternatingPattern: 0
+    platformWidth: 3.2
+    platformHeight: 0.28
+    widthVariationEnabled: 0
+    platformWidthMin: 2.2
+    platformWidthMax: 3.8
+    narrowPlatformChance: 0.08
+    wideRecoveryPlatformEvery: 5
+    difficultyRampEnabled: 1
+    difficultyRampStartHeight: 30
+    difficultyRampStrength: 0.2
+    minPlatformWidthAtHighDifficulty: 2
+    maxVerticalSpacingAtHighDifficulty: 3.4
+    recoveryPlatformEvery: 6
+    recoveryPlatformWidthMultiplier: 1.45
+    easyStartPlatformCount: 6
+    safeLandingWidthMultiplier: 1.35
+    useOneWayPlatforms: 1
+    oneWaySurfaceArc: 150
+    useCameraBasedHorizontalBounds: 1
+    screenHorizontalMargin: 0.35
+    clampPlatformsToVisibleWidth: 1
+    manualHalfWidthFallback: 4
+    drawPlayfieldBoundsGizmos: 1
+  RunRules:
+    fallDistanceLimit: 14
+    resetDelay: 0
+  Feedback:
+    enableFeedback: 1
+    enableCameraImpulse: 1
+    landingCameraImpulse: 0.07
+    ropeStretchCameraImpulse: 0.04
+    dangerCameraImpulse: 0.1
+    enableHaptics: 1
+    landingHapticStrength: 0.3
+    ropeStretchHapticStrength: 0.2
+    dangerHapticStrength: 0.45
+    enableScreenDangerVignette: 1
+    dangerStartRatio: 0.65
+    dangerMaxAlpha: 0.35
+    enableHeightMilestonePulse: 1
+    heightMilestoneInterval: 10
+  Onboarding:
+    showCountdown: 1
+    countdownStepDuration: 0.65
+    showTutorialHints: 0
+    hintDuration: 2.5
+    rememberTutorialSeen: 1

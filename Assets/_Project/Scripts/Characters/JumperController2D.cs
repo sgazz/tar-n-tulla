@@ -1,4 +1,5 @@
 using UnityEngine;
+using TarTulla.Core;
 using TarTulla.Game;
 using TarTulla.Platforms;
 using TarTulla.Rope;
@@ -112,6 +113,7 @@ namespace TarTulla.Characters
             }
 
             Log("Landing accepted");
+            GameplayFeedbackEvents.InvokeJumperLanded(jumperName);
             Log($"Applying jump impulse: {JumpForce}");
             ApplyJump();
         }
@@ -145,12 +147,13 @@ namespace TarTulla.Characters
 
             rb.linearVelocity = velocity;
             float jumpForce = JumpForce;
-            rope ??= FindFirstObjectByType<ElasticRope2D>();
+            rope ??= FindAnyObjectByType<ElasticRope2D>();
             if (rope != null)
                 jumpForce *= rope.GetClimbJumpMultiplier(this);
 
             rb.AddForce(Vector2.up * jumpForce, ForceMode2D.Impulse);
             jumpCooldownUntil = Time.time + JumpCooldown;
+            GameplayFeedbackEvents.InvokeJumpImpulse(jumperName);
         }
 
         void ApplyResolvedGravityScale()

@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using UnityEngine;
 using TarTulla.CameraSystems;
@@ -16,12 +17,20 @@ namespace TarTulla.Core
         [SerializeField] ClimbProgressTracker progressTracker;
         [SerializeField] VerticalCameraFollow2D cameraFollow;
         [SerializeField] float fallDistanceLimit = 14f;
+        [SerializeField] bool autoStartOnPlay;
 
         Transform tar;
         Transform tulla;
         bool runActive;
+        bool runPaused;
         bool resetPending;
         Coroutine resetRoutine;
+        float lastDangerRatio = -1f;
+
+        const float DangerRatioChangeThreshold = 0.04f;
+
+        public event Action<float, float> OnRunFailed;
+        public bool IsRunActive => runActive;
 
         float FallDistanceLimit => GetRunRules().fallDistanceLimit;
         float ResetDelay => GetRunRules().resetDelay;
@@ -52,17 +61,19 @@ namespace TarTulla.Core
         void Start()
         {
             ResolveReferences();
-            StartRun();
+
+            if (autoStartOnPlay)
+                StartRun();
         }
 
         void Update()
         {
-            if (!runActive)
+            if (!runActive || runPaused)
                 return;
 
 #if UNITY_EDITOR
             if (PrototypeKeyboardInput.WasResetRunPressed())
-                StartRun();
+                ResetRun();
 
             if (PrototypeKeyboardInput.WasRebuildLayoutPressed())
                 RebuildLayout();
@@ -83,10 +94,18 @@ namespace TarTulla.Core
             }
 
             if (!resetPending && HasFailed())
-                BeginResetRun();
+                BeginRunFailed();
+
+            UpdateDangerFeedback();
         }
 
         public void StartRun()
+        {
+            PrepareRun();
+            StartPreparedRun();
+        }
+
+        public void PrepareRun()
         {
             if (resetRoutine != null)
             {
@@ -95,6 +114,7 @@ namespace TarTulla.Core
             }
 
             resetPending = false;
+            runPaused = true;
             ResolveReferences();
 
             if (levelBuilder == null || progressTracker == null)
@@ -111,10 +131,41 @@ namespace TarTulla.Core
             progressTracker.SetTargets(tar, tulla, baselineY);
             progressTracker.ResetProgress();
             cameraFollow?.ResetToTargets();
+            lastDangerRatio = -1f;
+            GameplayFeedbackEvents.InvokeDangerRatioChanged(0f);
 
             runActive = true;
+            Debug.Log("[Tar&Tulla] Run prepared");
+        }
+
+        public void StartPreparedRun()
+        {
+            if (!runActive)
+                PrepareRun();
+
+            runPaused = false;
             Debug.Log("[Tar&Tulla] Run started");
         }
+
+        public void ResetRun() => StartRun();
+
+        public void StopRun()
+        {
+            if (resetRoutine != null)
+            {
+                StopCoroutine(resetRoutine);
+                resetRoutine = null;
+            }
+
+            resetPending = false;
+            runPaused = false;
+            runActive = false;
+            levelBuilder?.ClearGeneratedContent();
+            tar = null;
+            tulla = null;
+        }
+
+        public void SetRunPaused(bool paused) => runPaused = paused;
 
         public void RebuildLayout()
         {
@@ -131,25 +182,57 @@ namespace TarTulla.Core
             cameraFollow?.ResetToTargets();
         }
 
-        void BeginResetRun()
+        void BeginRunFailed()
         {
             resetPending = true;
-            resetRoutine = StartCoroutine(ResetRunAfterDelay());
+            runActive = false;
+
+            float height = progressTracker != null ? progressTracker.CurrentHeight : 0f;
+            float best = progressTracker != null ? progressTracker.BestHeight : 0f;
+            OnRunFailed?.Invoke(height, best);
+
+            if (ResetDelay > 0f)
+                resetRoutine = StartCoroutine(ClearResetPendingAfterDelay());
+            else
+                resetPending = false;
         }
 
-        IEnumerator ResetRunAfterDelay()
+        IEnumerator ClearResetPendingAfterDelay()
         {
-            if (ResetDelay > 0f)
-                yield return new WaitForSeconds(ResetDelay);
-
-            Debug.Log("[Tar&Tulla] Run reset: fell too far");
-            StartRun();
+            yield return new WaitForSecondsRealtime(ResetDelay);
+            resetPending = false;
+            resetRoutine = null;
         }
 
         bool HasFailed()
         {
             float failLine = progressTracker.HighestReachedY - FallDistanceLimit;
             return tar.position.y < failLine && tulla.position.y < failLine;
+        }
+
+        void UpdateDangerFeedback()
+        {
+            var feedback = TarTullaTuningAccess.GetActiveProfile()?.Feedback;
+            if (feedback != null && !feedback.enableFeedback)
+            {
+                if (lastDangerRatio > 0.001f)
+                {
+                    lastDangerRatio = 0f;
+                    GameplayFeedbackEvents.InvokeDangerRatioChanged(0f);
+                }
+
+                return;
+            }
+
+            float failLine = progressTracker.HighestReachedY - FallDistanceLimit;
+            float margin = Mathf.Min(tar.position.y - failLine, tulla.position.y - failLine);
+            float ratio = 1f - Mathf.Clamp01(margin / FallDistanceLimit);
+
+            if (Mathf.Abs(ratio - lastDangerRatio) < DangerRatioChangeThreshold)
+                return;
+
+            lastDangerRatio = ratio;
+            GameplayFeedbackEvents.InvokeDangerRatioChanged(ratio);
         }
 
         void CacheJumperTransforms()
@@ -175,9 +258,9 @@ namespace TarTulla.Core
         {
             levelBuilder ??= GetComponent<PrototypeLevelBuilder>();
             progressTracker ??= GetComponent<ClimbProgressTracker>();
-            levelBuilder ??= FindFirstObjectByType<PrototypeLevelBuilder>();
-            progressTracker ??= FindFirstObjectByType<ClimbProgressTracker>();
-            cameraFollow ??= FindFirstObjectByType<VerticalCameraFollow2D>();
+            levelBuilder ??= FindAnyObjectByType<PrototypeLevelBuilder>();
+            progressTracker ??= FindAnyObjectByType<ClimbProgressTracker>();
+            cameraFollow ??= FindAnyObjectByType<VerticalCameraFollow2D>();
         }
     }
 }

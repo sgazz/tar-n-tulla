@@ -1,0 +1,38 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b20b0b0b0b0b4049a8b7c6d5e4f3020b, type: 3}
+  m_Name: TarTulla_UITheme_Default
+  m_EditorClassIdentifier: 
+  backgroundColor: {r: 0.07, g: 0.08, b: 0.11, a: 1}
+  panelColor: {r: 0.1, g: 0.12, b: 0.16, a: 0.94}
+  panelBorderColor: {r: 0.28, g: 0.32, b: 0.38, a: 0.5}
+  panelCornerRadius: 0
+  primaryTextColor: {r: 0.95, g: 0.96, b: 0.98, a: 1}
+  secondaryTextColor: {r: 0.72, g: 0.76, b: 0.82, a: 1}
+  accentColorTar: {r: 0.35, g: 0.75, b: 0.95, a: 1}
+  accentColorTulla: {r: 0.95, g: 0.55, b: 0.35, a: 1}
+  ropeColor: {r: 0.88, g: 0.8, b: 0.55, a: 1}
+  dangerColor: {r: 0.82, g: 0.38, b: 0.35, a: 1}
+  buttonColor: {r: 0.22, g: 0.48, b: 0.72, a: 1}
+  buttonPressedColor: {r: 0.14, g: 0.32, b: 0.52, a: 1}
+  buttonSecondaryColor: {r: 0.16, g: 0.18, b: 0.22, a: 0.92}
+  buttonTextColor: {r: 0.96, g: 0.97, b: 0.99, a: 1}
+  hudStripColor: {r: 0, g: 0, b: 0, a: 0.38}
+  hudClimbHintColor: {r: 0.88, g: 0.8, b: 0.55, a: 0.85}
+  overlayDimColor: {r: 0, g: 0, b: 0, a: 0.62}
+  developerHudBackground: {r: 0.05, g: 0.06, b: 0.08, a: 0.55}
+  developerHudTextColor: {r: 0.55, g: 0.9, b: 0.65, a: 1}
+  defaultTitleSize: 96
+  defaultHeaderSize: 72
+  defaultBodySize: 36
+  defaultButtonTextSize: 40
+  mainMenuKeyArt: {fileID: 21300000, guid: 68f24dd40c3741918843de8e3c483276, type: 3}

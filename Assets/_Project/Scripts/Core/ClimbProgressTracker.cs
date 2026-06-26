@@ -1,3 +1,4 @@
+using TarTulla.Game;
 using UnityEngine;
 
 namespace TarTulla.Core
@@ -10,6 +11,7 @@ namespace TarTulla.Core
 
         float highestReachedY;
         float bestHeight;
+        int lastMilestoneIndex;
 
         public float CurrentHeight => Mathf.Max(0f, highestReachedY - runBaselineY);
         public float BestHeight => bestHeight;
@@ -33,8 +35,32 @@ namespace TarTulla.Core
                 highestReachedY = midpointY;
 
             float runHeight = CurrentHeight;
+            float previousBest = bestHeight;
             if (runHeight > bestHeight)
                 bestHeight = runHeight;
+
+            if (runHeight > previousBest + 0.001f && runHeight > 0.01f)
+                GameplayFeedbackEvents.InvokeNewBestHeight(runHeight);
+
+            TryInvokeHeightMilestone(runHeight);
+        }
+
+        void TryInvokeHeightMilestone(float runHeight)
+        {
+            var feedback = TarTullaTuningAccess.GetActiveProfile()?.Feedback;
+            if (feedback != null && (!feedback.enableFeedback || !feedback.enableHeightMilestonePulse))
+                return;
+
+            float interval = feedback != null ? feedback.heightMilestoneInterval : 10f;
+            if (interval <= 0f || runHeight < interval)
+                return;
+
+            int milestoneIndex = Mathf.FloorToInt(runHeight / interval);
+            if (milestoneIndex <= lastMilestoneIndex)
+                return;
+
+            lastMilestoneIndex = milestoneIndex;
+            GameplayFeedbackEvents.InvokeHeightMilestone(milestoneIndex * interval);
         }
 
         public void ResetProgress()
@@ -42,6 +68,8 @@ namespace TarTulla.Core
             highestReachedY = GetMidpointY();
             if (highestReachedY < runBaselineY)
                 highestReachedY = runBaselineY;
+
+            lastMilestoneIndex = 0;
         }
 
         float GetMidpointY()

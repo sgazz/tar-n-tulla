@@ -60,7 +60,8 @@ namespace TarTulla.CameraSystems
                 ? 0f
                 : Mathf.Clamp(midpoint.x * horizontalFollow, -maxHorizontalOffset, maxHorizontalOffset);
             var desiredPosition = new Vector3(targetX, desiredY, transform.position.z);
-            transform.position = Vector3.SmoothDamp(transform.position, desiredPosition, ref velocity, SmoothTime);
+            transform.position = Vector3.SmoothDamp(transform.position, desiredPosition, ref velocity, SmoothTime)
+                + CameraImpulse2D.WorldOffset;
         }
 
         public void SetTargets(Transform a, Transform b)

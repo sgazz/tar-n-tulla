@@ -25,6 +25,12 @@ namespace TarTulla.Game
         [Header("Run Rules — pravila run-a")]
         public RunRulesTuning RunRules = new();
 
+        [Header("Feedback — gameplay osećaj")]
+        public FeedbackTuning Feedback = new();
+
+        [Header("Onboarding — uvod i start run-a")]
+        public OnboardingTuning Onboarding = new();
+
         public override bool ValidateProfile()
         {
             bool isValid = base.ValidateProfile();
@@ -102,6 +108,19 @@ namespace TarTulla.Game
 
             RunRules.fallDistanceLimit = Mathf.Max(1f, RunRules.fallDistanceLimit);
             RunRules.resetDelay = Mathf.Max(0f, RunRules.resetDelay);
+
+            Feedback.landingCameraImpulse = Mathf.Max(0f, Feedback.landingCameraImpulse);
+            Feedback.ropeStretchCameraImpulse = Mathf.Max(0f, Feedback.ropeStretchCameraImpulse);
+            Feedback.dangerCameraImpulse = Mathf.Max(0f, Feedback.dangerCameraImpulse);
+            Feedback.landingHapticStrength = Mathf.Clamp01(Feedback.landingHapticStrength);
+            Feedback.ropeStretchHapticStrength = Mathf.Clamp01(Feedback.ropeStretchHapticStrength);
+            Feedback.dangerHapticStrength = Mathf.Clamp01(Feedback.dangerHapticStrength);
+            Feedback.dangerStartRatio = Mathf.Clamp01(Feedback.dangerStartRatio);
+            Feedback.dangerMaxAlpha = Mathf.Clamp01(Feedback.dangerMaxAlpha);
+            Feedback.heightMilestoneInterval = Mathf.Max(1f, Feedback.heightMilestoneInterval);
+
+            Onboarding.countdownStepDuration = Mathf.Max(0.2f, Onboarding.countdownStepDuration);
+            Onboarding.hintDuration = Mathf.Max(0.5f, Onboarding.hintDuration);
 
             return isValid;
         }
@@ -365,6 +384,75 @@ namespace TarTulla.Game
 
             [Tooltip("Pauza u sekundama pre automatskog reset-a nakon pada. Veća vrednost = sporiji restart.")]
             public float resetDelay = 0f;
+        }
+
+        [Serializable]
+        public class FeedbackTuning
+        {
+            [Tooltip("Uključuje ceo gameplay feedback sloj (kamera, haptika, UI pulse).")]
+            public bool enableFeedback = true;
+
+            [Header("Kamera — impulse")]
+            [Tooltip("Dozvoljava blagi camera impulse pri važnim momentima.")]
+            public bool enableCameraImpulse = true;
+
+            [Tooltip("Jačina vertikalnog camera impulse-a pri sletanju. Veća vrednost = jači ali i dalje suptilan shake.")]
+            public float landingCameraImpulse = 0.08f;
+
+            [Tooltip("Jačina camera impulse-a kada je konopac previše istegnut. Veća vrednost = uočljiviji signal napetosti.")]
+            public float ropeStretchCameraImpulse = 0.05f;
+
+            [Tooltip("Jačina camera impulse-a u opasnoj zoni pada. Veća vrednost = jači signal opasnosti.")]
+            public float dangerCameraImpulse = 0.12f;
+
+            [Header("Haptika")]
+            [Tooltip("Uključuje jednostavnu haptiku na mobilnim uređajima (fallback vibracija).")]
+            public bool enableHaptics = true;
+
+            [Tooltip("Jačina haptike pri sletanju (0–1). Veća vrednost = jača vibracija.")]
+            public float landingHapticStrength = 0.35f;
+
+            [Tooltip("Jačina haptike pri preteranom istezanju konopca (0–1).")]
+            public float ropeStretchHapticStrength = 0.25f;
+
+            [Tooltip("Jačina haptike u opasnoj zoni pada (0–1). Veća vrednost = uočljivije upozorenje.")]
+            public float dangerHapticStrength = 0.5f;
+
+            [Header("UI — opasnost")]
+            [Tooltip("Prikazuje crveni/dark vignette overlay kada se igrač približava padu.")]
+            public bool enableScreenDangerVignette = true;
+
+            [Tooltip("Danger ratio od kog vignette počinje da se pojavljuje (0–1). Veća vrednost = kasnije uključivanje.")]
+            public float dangerStartRatio = 0.65f;
+
+            [Tooltip("Maksimalna alpha vignette-a u punoj opasnosti (0–1). Veća vrednost = tamniji/crveniji ekran.")]
+            public float dangerMaxAlpha = 0.35f;
+
+            [Header("UI — visina")]
+            [Tooltip("Kratki pulse teksta pri svakom pređenom intervalu visine.")]
+            public bool enableHeightMilestonePulse = true;
+
+            [Tooltip("Interval u metrima između milestone pulse feedback-a. Manja vrednost = češći pulse.")]
+            public float heightMilestoneInterval = 10f;
+        }
+
+        [Serializable]
+        public class OnboardingTuning
+        {
+            [Tooltip("Prikazuje kratki countdown (Ready / 3 / 2 / 1 / Climb!) pre početka igre.")]
+            public bool showCountdown = true;
+
+            [Tooltip("Trajanje jednog koraka countdown-a u sekundama (realtime). Veća vrednost = sporiji start.")]
+            public float countdownStepDuration = 0.65f;
+
+            [Tooltip("Prikazuje kratke tutorial hint-ove tokom prvog run-a.")]
+            public bool showTutorialHints = true;
+
+            [Tooltip("Koliko sekundi svaki hint ostaje vidljiv (realtime).")]
+            public float hintDuration = 2.5f;
+
+            [Tooltip("Pamti da je tutorial već prikazan (PlayerPrefs) i ne ponavlja ga.")]
+            public bool rememberTutorialSeen = true;
         }
     }
 }

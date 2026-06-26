@@ -12,6 +12,7 @@ namespace TarTulla.Input
         [SerializeField] bool enableDebugLogs;
 
         float smoothedInput;
+        bool loggedMissingSensor;
 
         public float HorizontalInput => smoothedInput;
 
@@ -20,6 +21,21 @@ namespace TarTulla.Input
         float TiltSensitivity => GetTiltValue(t => t.tiltSensitivity, s => s.tiltSensitivity, 8f);
         float InputDeadZone => GetTiltValue(t => t.inputDeadZone, s => s.inputDeadZone, 0.08f);
         float Smoothing => GetTiltValue(t => t.smoothing, s => s.smoothing, 8f);
+
+        void OnEnable()
+        {
+#if ENABLE_INPUT_SYSTEM
+            InputSystem.onDeviceChange += HandleDeviceChange;
+            EnableAvailableSensors();
+#endif
+        }
+
+        void OnDisable()
+        {
+#if ENABLE_INPUT_SYSTEM
+            InputSystem.onDeviceChange -= HandleDeviceChange;
+#endif
+        }
 
         void Update()
         {
@@ -63,12 +79,11 @@ namespace TarTulla.Input
         float ReadAccelerometerInput()
         {
 #if ENABLE_INPUT_SYSTEM
-            var accelerometer = Accelerometer.current;
-            if (accelerometer != null)
-            {
-                float tilt = accelerometer.acceleration.ReadValue().x * TiltSensitivity;
-                return Mathf.Clamp(tilt, -1f, 1f);
-            }
+            if (TryReadGravitySensor(out float gravityTilt))
+                return gravityTilt;
+
+            if (TryReadAccelerometerDevice(out float accelTilt))
+                return accelTilt;
 #endif
 
 #if ENABLE_LEGACY_INPUT_MANAGER
@@ -79,7 +94,82 @@ namespace TarTulla.Input
             }
 #endif
 
+            LogMissingSensorOnce();
             return 0f;
+        }
+
+#if ENABLE_INPUT_SYSTEM
+        void HandleDeviceChange(InputDevice device, InputDeviceChange change)
+        {
+            if (change == InputDeviceChange.Added || change == InputDeviceChange.Reconnected)
+                TryEnableSensor(device);
+        }
+
+        void EnableAvailableSensors()
+        {
+            foreach (var device in InputSystem.devices)
+                TryEnableSensor(device);
+        }
+
+        static void TryEnableSensor(InputDevice device)
+        {
+            if (device == null || device.enabled)
+                return;
+
+            if (device is GravitySensor or Accelerometer)
+                InputSystem.EnableDevice(device);
+        }
+
+        bool TryReadGravitySensor(out float tilt)
+        {
+            tilt = 0f;
+            var sensor = GravitySensor.current;
+            if (sensor == null)
+                return false;
+
+            if (!sensor.enabled)
+                InputSystem.EnableDevice(sensor);
+
+            Vector3 gravity = sensor.gravity.ReadValue();
+            if (gravity.sqrMagnitude < 0.01f)
+                return false;
+
+            // Portrait: device X maps to left/right tilt when held upright.
+            tilt = (gravity.x / gravity.magnitude) * TiltSensitivity;
+            tilt = Mathf.Clamp(tilt, -1f, 1f);
+            return true;
+        }
+
+        bool TryReadAccelerometerDevice(out float tilt)
+        {
+            tilt = 0f;
+            var sensor = Accelerometer.current;
+            if (sensor == null)
+                return false;
+
+            if (!sensor.enabled)
+                InputSystem.EnableDevice(sensor);
+
+            Vector3 acceleration = sensor.acceleration.ReadValue();
+            if (acceleration.sqrMagnitude < 0.01f)
+                return false;
+
+            tilt = (acceleration.x / acceleration.magnitude) * TiltSensitivity;
+            tilt = Mathf.Clamp(tilt, -1f, 1f);
+            return true;
+        }
+#endif
+
+        void LogMissingSensorOnce()
+        {
+            if (loggedMissingSensor)
+                return;
+
+            loggedMissingSensor = true;
+            Debug.LogWarning(
+                "[Tar&Tulla][TiltInput] No gravity/accelerometer sensor available. " +
+                "Tilt control disabled on this device/build.",
+                this);
         }
 
         float ApplyDeadZone(float value)

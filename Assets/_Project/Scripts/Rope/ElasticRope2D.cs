@@ -1,5 +1,6 @@
 using UnityEngine;
 using TarTulla.Characters;
+using TarTulla.Core;
 using TarTulla.Game;
 
 namespace TarTulla.Rope
@@ -33,6 +34,12 @@ namespace TarTulla.Rope
         float ClimbLeadPullFactor => GetRopeValue(r => r.climbLeadPullFactor, _ => 0.3f, 0.3f);
         float ClimbAnchorBoost => GetRopeValue(r => r.climbAnchorBoost, _ => 2f, 2f);
         float ClimbSlingJumpMultiplier => GetRopeValue(r => r.climbSlingJumpMultiplier, _ => 1.35f, 1.35f);
+
+        public float StretchRatio { get; private set; } = 1f;
+
+        const float FeedbackCooldown = 0.2f;
+        float lastOverstretchFeedbackTime = -999f;
+        float lastPullAssistFeedbackTime = -999f;
 
         void Awake()
         {
@@ -104,6 +111,7 @@ namespace TarTulla.Rope
             Vector2 posB = bodyB.position;
             Vector2 delta = posB - posA;
             float distance = delta.magnitude;
+            StretchRatio = RestLength > 0.001f ? distance / RestLength : 1f;
 
             if (distance < 0.001f)
                 return;
@@ -157,6 +165,14 @@ namespace TarTulla.Rope
             }
 
             ApplyPullAssist(posA, posB, direction, stretch);
+
+            float visualStretchRatio = MaxLength > 0.001f ? distance / MaxLength : 0f;
+            if (visualStretchRatio >= OverstretchColorThreshold
+                && Time.time - lastOverstretchFeedbackTime >= FeedbackCooldown)
+            {
+                lastOverstretchFeedbackTime = Time.time;
+                GameplayFeedbackEvents.InvokeRopeOverstretched(visualStretchRatio);
+            }
         }
 
         bool IsClimbTensionState(out JumperController2D anchor, out JumperController2D lead)
@@ -197,12 +213,14 @@ namespace TarTulla.Rope
             if (aGrounded && !bGrounded && posB.y < posA.y - ClimbHeightThreshold)
             {
                 bodyB.AddForce(direction * PullAssistStrength);
+                TryInvokePullAssistFeedback();
                 return;
             }
 
             if (bGrounded && !aGrounded && posA.y < posB.y - ClimbHeightThreshold)
             {
                 bodyA.AddForce(-direction * PullAssistStrength);
+                TryInvokePullAssistFeedback();
                 return;
             }
 
@@ -213,6 +231,16 @@ namespace TarTulla.Rope
             var leadBody = lead == jumperA ? bodyA : bodyB;
             Vector2 hoistDirection = (leadBody.position - anchorBody.position).normalized;
             anchorBody.AddForce(hoistDirection * PullAssistStrength);
+            TryInvokePullAssistFeedback();
+        }
+
+        void TryInvokePullAssistFeedback()
+        {
+            if (Time.time - lastPullAssistFeedbackTime < FeedbackCooldown)
+                return;
+
+            lastPullAssistFeedbackTime = Time.time;
+            GameplayFeedbackEvents.InvokePullAssistTriggered(PullAssistStrength);
         }
 
         void SetupLineRenderer()

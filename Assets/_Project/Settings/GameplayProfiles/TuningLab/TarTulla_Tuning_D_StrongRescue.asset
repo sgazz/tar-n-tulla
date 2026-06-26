@@ -1,0 +1,119 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 61e8845de9f143c7a7ded66d4716342c, type: 3}
+  m_Name: TarTulla_Tuning_D_StrongRescue
+  m_EditorClassIdentifier: 
+  profileId: tar_tulla_tuning_d_strong_rescue
+  displayName: Tuning D — Strong Rescue
+  description: "Test jakih rescue trenutaka — visok pull assist, jači rope feedback. Partner treba očigledno da spašava drugog bez auto-win osećaja."
+  version: 1
+  Character:
+    jumpForce: 20.14
+    gravityScale: 3
+    maxFallSpeed: 25
+    horizontalDamping: 2
+    landingVelocityThreshold: 0.5
+    groundedGraceTime: 0.05
+    jumpCooldown: 0.12
+    useSoftHorizontalBoundsForJumpers: 0
+    jumperSoftBoundsForce: 0
+  Rope:
+    restLength: 3
+    maxLength: 4.5
+    springStrength: 58
+    damping: 9
+    pullAssistStrength: 38
+    lineWidth: 0.08
+    overstretchColorThreshold: 0.85
+    climbLeadPullFactor: 0.35
+    climbAnchorBoost: 2.2
+    climbSlingJumpMultiplier: 1.35
+  Tilt:
+    tiltSensitivity: 8
+    maxHorizontalAirSpeed: 5
+    airAcceleration: 20
+    groundedControlMultiplier: 0.15
+    airborneControlMultiplier: 1
+    inputDeadZone: 0.08
+    smoothing: 8
+  Camera:
+    verticalOffset: 1.5
+    smoothTime: 0.25
+    allowSmallDownwardCorrection: 1
+    maxDownwardCorrection: 1.5
+    lockHorizontalPosition: 1
+  Platforms:
+    platformCount: 25
+    startY: -2
+    seed: 1337
+    useProceduralGeneration: 1
+    initialPlatformCount: 12
+    platformBufferAhead: 18
+    cleanupDistanceBelowCamera: 14
+    maxActivePlatforms: 40
+    generationSegmentHeight: 10
+    randomizeSeedOnRun: 0
+    verticalSpacingMin: 1.8
+    verticalSpacingMax: 2.8
+    minVerticalGap: 1.5
+    maxVerticalGap: 3
+    horizontalRange: 2.8
+    maxHorizontalGap: 2.2
+    horizontalDirectionChangeChance: 0.55
+    forceAlternatingPattern: 0
+    platformWidth: 2.8
+    platformHeight: 0.28
+    widthVariationEnabled: 0
+    platformWidthMin: 1.8
+    platformWidthMax: 3.4
+    narrowPlatformChance: 0.12
+    wideRecoveryPlatformEvery: 6
+    difficultyRampEnabled: 1
+    difficultyRampStartHeight: 25
+    difficultyRampStrength: 0.22
+    minPlatformWidthAtHighDifficulty: 1.9
+    maxVerticalSpacingAtHighDifficulty: 3.2
+    recoveryPlatformEvery: 6
+    recoveryPlatformWidthMultiplier: 1.4
+    easyStartPlatformCount: 5
+    safeLandingWidthMultiplier: 1.3
+    useOneWayPlatforms: 1
+    oneWaySurfaceArc: 150
+    useCameraBasedHorizontalBounds: 1
+    screenHorizontalMargin: 0.35
+    clampPlatformsToVisibleWidth: 1
+    manualHalfWidthFallback: 4
+    drawPlayfieldBoundsGizmos: 1
+  RunRules:
+    fallDistanceLimit: 14
+    resetDelay: 0
+  Feedback:
+    enableFeedback: 1
+    enableCameraImpulse: 1
+    landingCameraImpulse: 0.08
+    ropeStretchCameraImpulse: 0.07
+    dangerCameraImpulse: 0.12
+    enableHaptics: 1
+    landingHapticStrength: 0.35
+    ropeStretchHapticStrength: 0.38
+    dangerHapticStrength: 0.5
+    enableScreenDangerVignette: 1
+    dangerStartRatio: 0.65
+    dangerMaxAlpha: 0.35
+    enableHeightMilestonePulse: 1
+    heightMilestoneInterval: 10
+  Onboarding:
+    showCountdown: 1
+    countdownStepDuration: 0.65
+    showTutorialHints: 0
+    hintDuration: 2.5
+    rememberTutorialSeen: 1

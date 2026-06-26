@@ -94,3 +94,24 @@ MonoBehaviour:
   RunRules:
     fallDistanceLimit: 14
     resetDelay: 0
+  Feedback:
+    enableFeedback: 1
+    enableCameraImpulse: 1
+    landingCameraImpulse: 0.08
+    ropeStretchCameraImpulse: 0.05
+    dangerCameraImpulse: 0.12
+    enableHaptics: 1
+    landingHapticStrength: 0.35
+    ropeStretchHapticStrength: 0.25
+    dangerHapticStrength: 0.5
+    enableScreenDangerVignette: 1
+    dangerStartRatio: 0.65
+    dangerMaxAlpha: 0.35
+    enableHeightMilestonePulse: 1
+    heightMilestoneInterval: 10
+  Onboarding:
+    showCountdown: 1
+    countdownStepDuration: 0.65
+    showTutorialHints: 1
+    hintDuration: 2.5
+    rememberTutorialSeen: 1
