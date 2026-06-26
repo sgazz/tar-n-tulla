@@ -444,6 +444,155 @@ Set `useProceduralGeneration = false` on the profile and press **R**. Only `plat
 | **Platforms run out** | Raise `platformBufferAhead` or `maxActivePlatforms` |
 | **Too many objects** | Lower `maxActivePlatforms` or `cleanupDistanceBelowCamera` |
 
+## Visual Layers / Parallax
+
+Scene hierarchy (auto-organized at runtime by `SceneVisualLayerSetup` on `GameRoot`):
+
+```
+GameRoot
+ ├── BackgroundRoot
+ │    ├── FarBackground
+ │    ├── MidBackground
+ │    └── BackRockDetails
+ ├── GameplayRoot
+ │    ├── Platforms
+ │    ├── Jumpers
+ │    └── Rope
+ ├── ForegroundRoot
+ │    └── NearSideForeground
+ ├── Systems
+ └── UIRoot
+```
+
+### Sorting layers
+
+Defined in **Edit → Project Settings → Tags and Layers → Sorting Layers**:
+
+| Layer | Use |
+|-------|-----|
+| `BackgroundFar` | Farthest canyon fill |
+| `BackgroundMid` | Mid depth + back rock details |
+| `Gameplay` | Platforms, jumpers, rope |
+| `Foreground` | Near side frame overlay |
+| `UI` | Canvas (always on top) |
+
+If Console shows `Sorting layer 'Foreground' not found` (or similar), the TagManager unique IDs may be invalid. In Unity Editor run **Tar&Tulla → Ensure Visual Sorting Layers**, then re-enter Play Mode.
+
+**Black sprites on custom sorting layers:** URP 2D Lit sprites need `Global Light 2D` to target their sorting layers. Scene visual layers use **Sprite-Unlit-Default** material so backgrounds render without lighting. If gameplay sprites are black, select `Global Light 2D` in the scene and enable all sorting layers, or run **Tar&Tulla → Ensure Global Light 2D Sorting Layers**.
+
+### Far background asset
+
+`Assets/_Project/Art/Backgrounds/Far_Background_1080x1920.png`
+
+- Portrait **1080 × 1920** distant canyon art (no transparency required)
+- Assigned on `GameRoot → Scene Visual Layer Setup → Far Background Sprite`
+- Sorting layer **`BackgroundFar`** — behind all gameplay and foreground
+- Slowest parallax (`farParallaxFactor` default `(0.05, 0.10)`)
+
+### Mid background asset
+
+`Assets/_Project/Art/Backgrounds/Mid_Background_1080x1920.png`
+
+- Portrait **1080 × 1920** middle-distance canyon art (no transparency required)
+- Assigned on `GameRoot → Scene Visual Layer Setup → Mid Background Sprite`
+- Sorting layer **`BackgroundMid`** — in front of Far, behind gameplay
+- Medium parallax (`midParallaxFactor` default `(0.12, 0.20)`)
+
+### Near foreground asset
+
+Place (or keep) the transparent PNG at:
+
+`Assets/_Project/Art/Backgrounds/Near_Side_Foreground_1080x1920_transparent.png`
+
+**Important:** Keep this asset as a **PNG with alpha**. Do not replace with JPEG or a flattened image — the center gameplay corridor depends on real transparency.
+
+- Texture Type: **Sprite (2D and UI)**
+- **Alpha Is Transparency** enabled
+- Assigned on `GameRoot → Scene Visual Layer Setup → Near Side Foreground Sprite`
+- Rendered on sorting layer **`Foreground`**, order **20**
+- Uses `CameraLockedSprite2D` — stays locked to the portrait camera view (cover fit)
+- No collider — does not block touch input or physics
+
+### Recommended tuning values
+
+On `GameRoot → Scene Visual Layer Setup`:
+
+| Field | Default | Purpose |
+|-------|---------|---------|
+| `farParallaxFactor` | `(0.05, 0.10)` | Slowest background drift |
+| `midParallaxFactor` | `(0.12, 0.20)` | Mid canyon depth |
+| `backRockParallaxFactor` | `(0.18, 0.28)` | Near-back rocks, still behind gameplay |
+| `nearForegroundAlpha` | `0.90` | Frame strength — lower = subtler |
+| `nearForegroundScaleMultiplier` | `1.00` | Slightly shrink frame if edges feel heavy |
+| `nearForegroundOffset` | `(0, 0)` | Nudge frame relative to camera |
+| `enableNearForeground` | on | Toggle frame without deleting object |
+| `safeCorridorWidthPercent` | `0.62` | Editor gizmo width guide only |
+| `showSafeCorridorInEditorOnly` | off | Draw safe corridor in Scene view (Editor only) |
+
+### Reduce foreground strength
+
+If the canyon frame feels too heavy or hides the climb corridor:
+
+1. Lower **`nearForegroundAlpha`** (try `0.75`–`0.85`)
+2. Lower **`nearForegroundScaleMultiplier`** slightly (e.g. `0.97`) to pull rock edges inward
+3. Uncheck **`enableNearForeground`** to compare with/without the frame
+
+The transparent center of the PNG is never modified in code — only overall sprite alpha is scaled.
+
+### Check transparent center
+
+1. Select `Near_Side_Foreground_1080x1920_transparent.png` in Project
+2. Inspector → **Sprite Editor** preview — center should show checkerboard (alpha)
+3. Play mode: jumpers, rope, and platforms must stay visible in the middle corridor
+4. If the center looks solid white/gray, re-import with **Alpha Is Transparency** on or restore the PNG source
+
+### Test on tall mobile screens
+
+`CameraLockedSprite2D` uses **pixel aspect** when available so cover fit works on tall portrait ratios (9:16, 9:19.5, 10:16, iPhone/Android tall screens).
+
+1. **Game view** → add aspect ratios: `9:16`, `9:19.5`, `10:16`
+2. Play and confirm no empty strips at top/bottom/sides on the near foreground
+3. On device: verify frame covers edges and gameplay corridor stays readable
+4. If edges peek through, `coverBleed` on `CameraLockedSprite2D` defaults to `1.02` (small safety margin)
+
+### Tuning parallax
+
+Per-layer overrides: add or edit `ParallaxLayer2D` on any background object.  
+`parallaxFactor` `(0, 0)` = world-fixed; `(1, 1)` = moves with camera.  
+`lockToCameraX` / `lockToCameraY` = full camera lock on that axis (used by near foreground via `CameraLockedSprite2D`).
+
+### Sprite import (required)
+
+Background and foreground PNG/JPEG files under `Assets/_Project/Art/Backgrounds/` must be imported as:
+
+| Setting | Far / Mid | Near foreground |
+|---------|-----------|-----------------|
+| Texture Type | **Sprite (2D and UI)** | **Sprite (2D and UI)** |
+| Alpha Is Transparency | off (optional) | **ON** |
+| Max Size | **2048** or higher | **2048** or higher |
+| Compression | High quality (avoid crushing alpha on foreground) | Uncompressed / high quality |
+
+If sprites look missing in Play Mode, select `GameRoot → Scene Visual Layer Setup` and use **Validate Visual Layers Now** (context menu) or check Console for `[Tar&Tulla][Visual]` logs.
+
+Enable **`enableVisualDebugFallback`** for obvious magenta far / cyan near placeholders when art references are broken.
+
+### Sorting validation
+
+In **Editor** or **Development Build**, `VisualSortingLayerValidator` logs **once on Start** if:
+
+- `NearSideForeground` is not on `Foreground`
+- `ElasticRope` is not on `Gameplay`
+- Platforms are not on `Gameplay`
+- Background layers sort in front of gameplay
+
+No per-frame spam.
+
+### Enable / disable near foreground
+
+`GameRoot → Scene Visual Layer Setup → Enable Near Foreground` — uncheck to hide the frame without removing the object.
+
+Placeholder backgrounds (dark, low-contrast canyon tones) are created automatically until final art replaces the `SpriteRenderer` sprites on `FarBackground`, `MidBackground`, and `BackRockDetails`.
+
 ## Portrait playfield bounds
 
 Profile group: **Platforms → Granice igrališta (portrait)** in `TarTullaGameplayProfile`.

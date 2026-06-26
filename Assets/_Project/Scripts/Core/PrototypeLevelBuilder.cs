@@ -413,6 +413,7 @@ namespace TarTulla.Core
             var renderer = platform.AddComponent<SpriteRenderer>();
             renderer.sprite = CreateRectSprite();
             renderer.color = new Color(0.55f, 0.58f, 0.62f);
+            ApplyGameplaySorting(renderer);
             platform.transform.localScale = new Vector3(size.x, size.y, 1f);
 
             var collider = platform.AddComponent<BoxCollider2D>();
@@ -457,11 +458,38 @@ namespace TarTulla.Core
                 return;
 
             var gameRoot = bootstrap.transform;
+            var gameplayRoot = gameRoot.Find("GameplayRoot");
+            if (gameplayRoot != null)
+            {
+                charactersRoot ??= gameplayRoot.Find("Jumpers");
+                levelRoot ??= gameplayRoot.Find("Platforms");
+            }
+
             charactersRoot ??= gameRoot.Find("CharactersRoot");
             levelRoot ??= gameRoot.Find("LevelRoot");
             systemsRoot ??= gameRoot.Find("Systems");
 
             cameraFollow ??= FindAnyObjectByType<VerticalCameraFollow2D>();
+        }
+
+        Transform ResolveRopeRoot()
+        {
+            var bootstrap = FindAnyObjectByType<GameBootstrap>();
+            if (bootstrap != null)
+            {
+                var gameplayRoot = bootstrap.transform.Find("GameplayRoot");
+                var ropeRoot = gameplayRoot != null ? gameplayRoot.Find("Rope") : null;
+                if (ropeRoot != null)
+                    return ropeRoot;
+            }
+
+            return systemsRoot;
+        }
+
+        static void ApplyGameplaySorting(SpriteRenderer renderer)
+        {
+            renderer.sortingLayerName = VisualSortingLayers.Gameplay;
+            renderer.sortingOrder = 0;
         }
 
         JumperController2D CreateJumper(string name, Vector2 position, Color color, MobileTiltInput2D tiltInput, float gravityScale)
@@ -473,6 +501,7 @@ namespace TarTulla.Core
             var renderer = jumper.AddComponent<SpriteRenderer>();
             renderer.sprite = CreateCircleSprite();
             renderer.color = color;
+            ApplyGameplaySorting(renderer);
             jumper.transform.localScale = Vector3.one * (jumperRadius * 2f);
 
             var collider = jumper.AddComponent<CircleCollider2D>();
@@ -523,7 +552,7 @@ namespace TarTulla.Core
         void CreateRope(JumperController2D tar, JumperController2D tulla)
         {
             var ropeObject = new GameObject(RopeObjectName);
-            ropeObject.transform.SetParent(systemsRoot, false);
+            ropeObject.transform.SetParent(ResolveRopeRoot(), false);
 
             var lineRenderer = ropeObject.AddComponent<LineRenderer>();
             lineRenderer.numCapVertices = 4;
@@ -542,9 +571,23 @@ namespace TarTulla.Core
 
         void DestroyIfExists(string objectName)
         {
-            var existing = systemsRoot.Find(objectName);
-            if (existing != null)
-                DestroyImmediateSafe(existing.gameObject);
+            if (TryDestroyNamedChild(systemsRoot, objectName))
+                return;
+
+            TryDestroyNamedChild(ResolveRopeRoot(), objectName);
+        }
+
+        static bool TryDestroyNamedChild(Transform root, string objectName)
+        {
+            if (root == null)
+                return false;
+
+            var existing = root.Find(objectName);
+            if (existing == null)
+                return false;
+
+            DestroyImmediateSafe(existing.gameObject);
+            return true;
         }
 
         static PhysicsMaterial2D CreateJumperPhysicsMaterial()

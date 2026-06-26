@@ -259,6 +259,7 @@ namespace TarTulla.Rope
             if (lineRenderer.material == null)
                 lineRenderer.material = new Material(Shader.Find("Sprites/Default"));
 
+            lineRenderer.sortingLayerName = TarTulla.CameraSystems.VisualSortingLayers.Gameplay;
             lineRenderer.sortingOrder = 10;
         }
 
